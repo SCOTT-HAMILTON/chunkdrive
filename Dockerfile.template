@@ -1,0 +1,18 @@
+# 1. Create a new empty shell project
+FROM balenalib/%%BALENA_MACHINE_NAME%%-alpine:edge-run
+
+RUN apk add --no-cache cargo rust yq
+RUN mkdir chunkdrive
+WORKDIR /usr/src/chunkdrive
+
+COPY ./src ./src
+COPY ./Cargo.* ./
+# 5. Build for release.
+RUN cargo build --release --target-dir . 
+
+RUN apk add --no-cache yq
+COPY ./start.sh .
+COPY ./config.yml .
+COPY ./static_web ./static_web
+
+CMD [ "/bin/sh", "/usr/src/chunkdrive/start.sh" ]
