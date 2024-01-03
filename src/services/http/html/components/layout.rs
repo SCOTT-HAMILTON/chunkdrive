@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use yew::prelude::*;
 use yew::function_component;
+use yew::prelude::*;
 
 use crate::services::http::service::ServerData;
 

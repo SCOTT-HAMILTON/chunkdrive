@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::{time::{SystemTime, UNIX_EPOCH}, cmp::Ordering};
+use std::{
+    cmp::Ordering,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum Size {
@@ -27,7 +30,7 @@ impl PartialOrd for Size {
             (Size::Empty, _) => Some(Ordering::Less),
             (_, Size::Empty) => Some(Ordering::Greater),
         }
-    } 
+    }
 }
 
 impl Size {
@@ -43,7 +46,7 @@ impl Size {
                     i += 1;
                 }
                 format!("{} {}", bytes, units[i])
-            },
+            }
             Size::Empty => String::from("Empty"),
         }
     }

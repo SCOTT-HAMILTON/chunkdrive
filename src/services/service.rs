@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use serde::Deserialize;
+use std::sync::Arc;
 
 use crate::global::AsyncGlobal;
 

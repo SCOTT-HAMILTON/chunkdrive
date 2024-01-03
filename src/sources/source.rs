@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 use crate::global::Descriptor;
 
-use super::{local::LocalSource, discord_webhook::DiscordWebhook, github_releases::GithubReleases};
+use super::{discord_webhook::DiscordWebhook, github_releases::GithubReleases, local::LocalSource};
 
 #[async_trait]
 pub trait Source {
@@ -22,7 +22,7 @@ pub enum SourceType {
     #[serde(rename = "discord_webhook")]
     DiscordWebhook(DiscordWebhook),
     #[serde(rename = "github_releases")]
-    GithubRelease(GithubReleases)
+    GithubRelease(GithubReleases),
 }
 
 // This macro removes the need to write out the match statement for each method in the enum
@@ -49,7 +49,7 @@ impl SourceType {
 #[async_trait]
 impl Source for SourceType {
     fn max_size(&self) -> usize {
-        match_method!(self, max_size, )
+        match_method!(self, max_size,)
     }
 
     async fn get(&self, descriptor: &Descriptor) -> Result<Vec<u8>, String> {
@@ -65,6 +65,6 @@ impl Source for SourceType {
     }
 
     async fn create(&self) -> Result<Descriptor, String> {
-        match_method!(self, create, ).await
+        match_method!(self, create,).await
     }
 }

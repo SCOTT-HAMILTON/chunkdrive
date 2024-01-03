@@ -1,8 +1,11 @@
-use std::sync::Arc;
 use serde_yaml::from_str;
+use std::sync::Arc;
 
-use crate::{blocks::{block::Block, direct_block::DirectBlock}, global::Global};
 use super::utils::make_temp_config;
+use crate::{
+    blocks::{block::Block, direct_block::DirectBlock},
+    global::Global,
+};
 
 #[tokio::test]
 async fn empty_data() {

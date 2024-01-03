@@ -14,11 +14,13 @@ pub enum EncryptionType {
     #[serde(rename = "none")]
     None(None),
     #[serde(rename = "aes")]
-    Aes(Aes)
+    Aes(Aes),
 }
 
 impl Default for EncryptionType {
-    fn default() -> Self { EncryptionType::None(None) }
+    fn default() -> Self {
+        EncryptionType::None(None)
+    }
 }
 
 // This macro removes the need to write out the match statement for each method in the enum
@@ -35,7 +37,7 @@ impl EncryptionType {
     pub fn human_readable(&self) -> &str {
         match self {
             EncryptionType::None(_) => "none",
-            EncryptionType::Aes(_) => "aes"
+            EncryptionType::Aes(_) => "aes",
         }
     }
 }

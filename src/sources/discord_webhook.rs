@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::global::Descriptor;
 use super::source::Source;
+use crate::global::Descriptor;
 
 #[derive(Debug, Deserialize)]
 pub struct DiscordWebhook {
@@ -48,9 +48,12 @@ impl Source for DiscordWebhook {
             return Err("No attachments found".to_string());
         }
         match client.get(&parsed.attachments[0].url).send().await {
-            Ok(response) => Ok(response.bytes().await
-                .map_err(|e| format!("Error reading response: {}", e))?.to_vec()),
-            Err(e) => Err(format!("Error sending request: {}", e))
+            Ok(response) => Ok(response
+                .bytes()
+                .await
+                .map_err(|e| format!("Error reading response: {}", e))?
+                .to_vec()),
+            Err(e) => Err(format!("Error sending request: {}", e)),
         }
     }
 
@@ -63,13 +66,16 @@ impl Source for DiscordWebhook {
             .file_name("d")
             .mime_str("application/octet-stream")
             .map_err(|e| format!("Error creating part: {}", e))?;
-        let payload_part = reqwest::multipart::Part::text(json!({
-            "attachments": [
-               { "id": 0, "filename": "d" }
-            ],
-        }).to_string())
-            .mime_str("application/json")
-            .map_err(|e| format!("Error creating part: {}", e))?;
+        let payload_part = reqwest::multipart::Part::text(
+            json!({
+                "attachments": [
+                   { "id": 0, "filename": "d" }
+                ],
+            })
+            .to_string(),
+        )
+        .mime_str("application/json")
+        .map_err(|e| format!("Error creating part: {}", e))?;
         let form = reqwest::multipart::Form::new()
             .part("payload_json", payload_part)
             .part("files[0]", data_part);
@@ -101,14 +107,17 @@ impl Source for DiscordWebhook {
             .file_name("d")
             .mime_str("application/octet-stream")
             .map_err(|e| format!("Error creating part: {}", e))?;
-        let payload_part = reqwest::multipart::Part::text(json!({
-            "flags": 1<<12, // suppress notifications (@silent)
-            "attachments": [
-                { "id": 0, "filename": "d" }
-            ],
-        }).to_string())
-             .mime_str("application/json")
-             .map_err(|e| format!("Error creating part: {}", e))?;
+        let payload_part = reqwest::multipart::Part::text(
+            json!({
+                "flags": 1<<12, // suppress notifications (@silent)
+                "attachments": [
+                    { "id": 0, "filename": "d" }
+                ],
+            })
+            .to_string(),
+        )
+        .mime_str("application/json")
+        .map_err(|e| format!("Error creating part: {}", e))?;
         let form = reqwest::multipart::Form::new()
             .part("payload_json", payload_part)
             .part("files[0]", empty);

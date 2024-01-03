@@ -1,15 +1,15 @@
 /*
-    This block stores the data directly in the buckets.
-    It does not split the data into chunks.
- */
+   This block stores the data directly in the buckets.
+   It does not split the data into chunks.
+*/
 
-use std::{ops::Range, sync::Arc};
 use async_trait::async_trait;
 use futures::stream::BoxStream;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::{ops::Range, sync::Arc};
 
-use crate::global::{GlobalTrait, Descriptor};
 use super::block::{Block, BlockType};
+use crate::global::{Descriptor, GlobalTrait};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DirectBlock {
@@ -23,11 +23,18 @@ pub struct DirectBlock {
 
 #[async_trait]
 impl Block for DirectBlock {
-    async fn range<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&self, _global: Arc<U>) -> Result<Range<usize>, String> {
+    async fn range<U: GlobalTrait + std::marker::Send + std::marker::Sync>(
+        &self,
+        _global: Arc<U>,
+    ) -> Result<Range<usize>, String> {
         Ok(self.range.clone())
     }
 
-    fn get<'a, U: GlobalTrait + std::marker::Send + std::marker::Sync + 'a>(&'a self, global: Arc<U>, range: Range<usize>) -> BoxStream<'a, Result<Vec<u8>, String>> {
+    fn get<'a, U: GlobalTrait + std::marker::Send + std::marker::Sync + 'a>(
+        &'a self,
+        global: Arc<U>,
+        range: Range<usize>,
+    ) -> BoxStream<'a, Result<Vec<u8>, String>> {
         Box::pin(async_stream::stream! {
             if range.end <= self.range.start || range.start >= self.range.end {
                 return // the range is outside of the block, so we return an empty stream
@@ -50,61 +57,75 @@ impl Block for DirectBlock {
     }
 
     // indirect blocks ensure that the data.length == range.length && data[0] corresponds to range.start
-    async fn put<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&mut self, global: Arc<U>, data: Vec<u8>, _range: Range<usize>) -> Result<(), String> {
+    async fn put<U: GlobalTrait + std::marker::Send + std::marker::Sync>(
+        &mut self,
+        global: Arc<U>,
+        data: Vec<u8>,
+        _range: Range<usize>,
+    ) -> Result<(), String> {
         // put the data
         let bucket = match global.get_bucket(&self.bucket) {
             Some(bucket) => bucket,
-            None => return Err("Bucket not found".to_string())
+            None => return Err("Bucket not found".to_string()),
         };
         match bucket.put(&self.descriptor, data.clone()).await {
             Ok(_) => Ok(()),
-            Err(e) => Err(format!("Could not put the data: {}", e))
+            Err(e) => Err(format!("Could not put the data: {}", e)),
         }
     }
 
-    async fn delete<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&self, global: Arc<U>) -> Result<(), String> {
+    async fn delete<U: GlobalTrait + std::marker::Send + std::marker::Sync>(
+        &self,
+        global: Arc<U>,
+    ) -> Result<(), String> {
         let bucket = match global.get_bucket(&self.bucket) {
             Some(bucket) => bucket,
-            None => return Err("Bucket not found".to_string())
+            None => return Err("Bucket not found".to_string()),
         };
         bucket.delete(&self.descriptor).await
     }
 
-    async fn create<U: GlobalTrait + std::marker::Send + std::marker::Sync>(global: Arc<U>, data: Vec<u8>, start: usize) -> Result<BlockType, String> {
+    async fn create<U: GlobalTrait + std::marker::Send + std::marker::Sync>(
+        global: Arc<U>,
+        data: Vec<u8>,
+        start: usize,
+    ) -> Result<BlockType, String> {
         // finding the buckets
-        let bucket_name = global.random_bucket().ok_or("No buckets found".to_string())?;
+        let bucket_name = global
+            .random_bucket()
+            .ok_or("No buckets found".to_string())?;
         let bucket = match global.get_bucket(bucket_name) {
             Some(bucket) => bucket,
-            None => Err("Bucket not found".to_string())?
+            None => Err("Bucket not found".to_string())?,
         };
 
         // slice the data
         let data = data[..std::cmp::min(data.len(), bucket.max_size())].to_vec();
         if data.is_empty() {
-            return Err("Data is empty".to_string())
+            return Err("Data is empty".to_string());
         }
 
         // create descriptors
         let bucket = match global.get_bucket(bucket_name) {
             Some(bucket) => bucket,
-            None => Err("Bucket not found".to_string())?
+            None => Err("Bucket not found".to_string())?,
         };
         let descriptor = match bucket.create().await {
             Ok(descriptor) => descriptor,
-            Err(e) => return Err(format!("Could not create the descriptor: {}", e))
+            Err(e) => return Err(format!("Could not create the descriptor: {}", e)),
         };
 
         // put the data
         let bucket = match global.get_bucket(bucket_name) {
             Some(bucket) => bucket,
-            None => Err("Bucket not found".to_string())?
+            None => Err("Bucket not found".to_string())?,
         };
         bucket.put(&descriptor, data.clone()).await?;
 
         Ok(BlockType::Direct(DirectBlock {
             range: start..start + data.len(),
             bucket: bucket_name.clone(),
-            descriptor
+            descriptor,
         }))
     }
 

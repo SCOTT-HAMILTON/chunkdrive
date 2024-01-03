@@ -43,7 +43,7 @@ impl AesType {
             AesType::Aes256 => 32,
         }
     }
-    
+
     fn iv_size(&self) -> usize {
         match self {
             AesType::Aes128 => 16,
@@ -59,17 +59,21 @@ impl AesType {
             AesType::Aes256 => 32,
         }
     }
-
 }
 /* #endregion */
 
 // generate a key from a string by repeating it (if key was shorter, we also do some bit shifting in the repetions to make it more random)
 fn to_size(init_key: &Vec<u8>, size: usize) -> Vec<u8> {
-    let mut key = init_key.iter().cycle().take(size).cloned().collect::<Vec<u8>>();
+    let mut key = init_key
+        .iter()
+        .cycle()
+        .take(size)
+        .cloned()
+        .collect::<Vec<u8>>();
     for i in init_key.len()..key.len() {
         let mut tmp = key[i] as u16;
-        tmp = tmp << (i%3) | tmp >> (8 - (i%3));
-        tmp += key[i- init_key.len()] as u16;
+        tmp = tmp << (i % 3) | tmp >> (8 - (i % 3));
+        tmp += key[i - init_key.len()] as u16;
         tmp %= 256;
         key[i] = tmp as u8;
     }
@@ -104,7 +108,7 @@ impl Encryption for Aes {
                     .take_read_buffer()
                     .take_remaining()
                     .iter()
-                    .cloned()
+                    .cloned(),
             );
             match result {
                 buffer::BufferResult::BufferUnderflow => break,
@@ -137,7 +141,7 @@ impl Encryption for Aes {
                     .take_read_buffer()
                     .take_remaining()
                     .iter()
-                    .cloned()
+                    .cloned(),
             );
             match result {
                 buffer::BufferResult::BufferUnderflow => break,
@@ -179,14 +183,14 @@ mod aes_tests {
     fn key_extender() {
         let input_key = '0';
         let key = vec![input_key as u8];
-        
+
         let extended = to_size(&key, 126);
         println!("{:?}", extended);
 
         // calculate how often the single byte of the initial key is repeated
         let input_count = extended.iter().filter(|&x| *x == input_key as u8).count();
         // make sure its less than 50%
-        assert!(input_count < 125/2);
+        assert!(input_count < 125 / 2);
 
         let extended2 = to_size(&key, 126);
         // check if they are the same

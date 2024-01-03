@@ -1,15 +1,19 @@
-use std::sync::Arc;
 use futures::StreamExt;
 use serde_yaml::from_str;
+use std::sync::Arc;
 
-use crate::{blocks::block::{Block, BlockType}, global::Global};
 use super::utils::make_temp_config;
-
+use crate::{
+    blocks::block::{Block, BlockType},
+    global::Global,
+};
 
 async fn shared1(encryption: bool, local_size: usize, data: Vec<u8>) {
     let global = Arc::new(from_str::<Global>(&make_temp_config(encryption, local_size)).unwrap());
     let range = 0..data.len();
-    let mut block = BlockType::create(global.clone(), data.clone(), 0).await.unwrap();
+    let mut block = BlockType::create(global.clone(), data.clone(), 0)
+        .await
+        .unwrap();
     dbg!(&block);
     if !encryption {
         assert_eq!(block.range(global.clone()).await.unwrap(), range);
@@ -22,14 +26,20 @@ async fn shared1(encryption: bool, local_size: usize, data: Vec<u8>) {
         }
         assert_eq!(got1, data);
     }
-    let data1 = data.iter().map(|x| {
-        let mut y = x.to_owned() as u16;
-        y += 5;
-        y %= 256;
-        y as u8
-    }).collect::<Vec<u8>>();
+    let data1 = data
+        .iter()
+        .map(|x| {
+            let mut y = x.to_owned() as u16;
+            y += 5;
+            y %= 256;
+            y as u8
+        })
+        .collect::<Vec<u8>>();
     let range1 = 0..data1.len();
-    block.put(global.clone(), data1.clone(), range1.clone()).await.unwrap();
+    block
+        .put(global.clone(), data1.clone(), range1.clone())
+        .await
+        .unwrap();
     let mut got2 = Vec::new();
     {
         let mut stream = block.get(global.clone(), range1.clone());

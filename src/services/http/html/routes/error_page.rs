@@ -1,15 +1,14 @@
-use yew::prelude::*;
-use yew::function_component;
 use std::sync::Arc;
+use yew::function_component;
+use yew::prelude::*;
 
 use crate::services::http::html::components::layout::Layout;
 use crate::services::http::service::ServerData;
 
-
 #[derive(Properties)]
 pub struct ErrorPageProps {
     pub data: Arc<ServerData>,
-    pub error: String
+    pub error: String,
 }
 
 impl PartialEq for ErrorPageProps {

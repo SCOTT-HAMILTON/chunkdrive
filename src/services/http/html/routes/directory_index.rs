@@ -1,6 +1,6 @@
-use yew::prelude::*;
-use yew::function_component;
 use std::sync::Arc;
+use yew::function_component;
+use yew::prelude::*;
 
 use crate::inodes::directory::Directory;
 use crate::services::http::html::components::directory_entry::DirectoryEntry;
@@ -12,7 +12,7 @@ pub struct DirectoryIndexProps {
     pub path: Vec<String>,
     pub data: Arc<ServerData>,
     pub dir: Directory,
-    pub cut_inode: Option<String>
+    pub cut_inode: Option<String>,
 }
 
 impl PartialEq for DirectoryIndexProps {
@@ -22,16 +22,20 @@ impl PartialEq for DirectoryIndexProps {
 }
 
 #[function_component]
-pub fn DirectoryIndex(props: &DirectoryIndexProps) -> Html {    
+pub fn DirectoryIndex(props: &DirectoryIndexProps) -> Html {
     // for each part of the path where <a>$<b>$<c> strip $<c> if it exists
-    let path = props.path.iter().map(|part| {
-        let parts = part.split('$').collect::<Vec<&str>>();
-        if parts.len() <= 2 {
-            return part.clone();
-        }
-        format!("{}${}", parts[0], parts[1])
-    }).collect::<Vec<String>>();
-    
+    let path = props
+        .path
+        .iter()
+        .map(|part| {
+            let parts = part.split('$').collect::<Vec<&str>>();
+            if parts.len() <= 2 {
+                return part.clone();
+            }
+            format!("{}${}", parts[0], parts[1])
+        })
+        .collect::<Vec<String>>();
+
     html! {
         <Layout data={props.data.clone()}>
             <ul class="index">

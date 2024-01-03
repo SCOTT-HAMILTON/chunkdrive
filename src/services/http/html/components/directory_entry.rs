@@ -1,6 +1,6 @@
-use yew::prelude::*;
-use yew::function_component;
 use std::sync::Arc;
+use yew::function_component;
+use yew::prelude::*;
 
 use crate::services::http::service::ServerData;
 use crate::stored::Stored;
@@ -10,20 +10,23 @@ pub struct DirectoryEntryProps {
     pub path: Vec<String>,
     pub data: Arc<ServerData>,
     pub name: String,
-    pub inode: Stored
+    pub inode: Stored,
 }
 
 impl PartialEq for DirectoryEntryProps {
     fn eq(&self, other: &Self) -> bool {
-        self.path == other.path &&
-        self.name == other.name &&
-        self.inode == other.inode
+        self.path == other.path && self.name == other.name && self.inode == other.inode
     }
 }
 
 #[function_component]
 pub fn DirectoryEntry(props: &DirectoryEntryProps) -> Html {
-    let url = format!("/files/{}/{}${}", props.path.join("/"), props.inode.as_url(), props.name.replace('$', "%24"));
+    let url = format!(
+        "/files/{}/{}${}",
+        props.path.join("/"),
+        props.inode.as_url(),
+        props.name.replace('$', "%24")
+    );
 
     html! {
         <li class="entry inode">

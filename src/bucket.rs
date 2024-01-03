@@ -5,7 +5,11 @@
 
 use serde::Deserialize;
 
-use crate::{sources::source::{SourceType, Source}, encryption::encryption::{EncryptionType, Encryption}, global::Descriptor};
+use crate::{
+    encryption::encryption::{Encryption, EncryptionType},
+    global::Descriptor,
+    sources::source::{Source, SourceType},
+};
 
 #[derive(Deserialize, Debug)]
 pub struct Bucket {
@@ -17,13 +21,16 @@ pub struct Bucket {
 impl Bucket {
     // Returns the maximum size of data that can be stored in a single descriptor
     pub fn max_size(&self) -> usize {
-        self.encryption.max_size(
-            self.source.max_size()
-        )
+        self.encryption.max_size(self.source.max_size())
     }
 
     pub fn human_readable(&self) -> String {
-        format!("{:<20} {:<20} {}", self.source.human_readable(), self.encryption.human_readable(), self.max_size())
+        format!(
+            "{:<20} {:<20} {}",
+            self.source.human_readable(),
+            self.encryption.human_readable(),
+            self.max_size()
+        )
     }
 
     // Takes a descriptor and returns a stream of data or an error (String)
@@ -33,14 +40,14 @@ impl Bucket {
         let decrypted = self.encryption.decrypt(data, iv)?;
         Ok(decrypted)
     }
-    
+
     // Takes a descriptor and data and uploads the data to the descriptor or returns an error (String)
     pub async fn put(&self, descriptor: &Descriptor, data: Vec<u8>) -> Result<(), String> {
         let iv = descriptor.to_vec();
         let encrypted = self.encryption.encrypt(data, iv)?;
         self.source.put(descriptor, encrypted).await
     }
-    
+
     // Takes a descriptor and deletes the data at the descriptor or returns an error (String)
     pub async fn delete(&self, descriptor: &Descriptor) -> Result<(), String> {
         self.source.delete(descriptor).await

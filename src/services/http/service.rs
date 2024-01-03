@@ -1,15 +1,26 @@
-use std::sync::Arc;
+use actix_multipart::form::{bytes::Bytes, text::Text, MultipartForm};
+use actix_web::{cookie, route, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use futures::StreamExt;
 use serde::Deserialize;
-use actix_web::{web, App, HttpServer, Responder, HttpResponse, route, cookie, HttpRequest};
-use actix_multipart::form::{MultipartForm, bytes::Bytes, text::Text};
+use std::sync::Arc;
 use tokio::io::AsyncReadExt;
 use yew::ServerRenderer;
 
-use crate::{global::AsyncGlobal, services::service::Service, inodes::{inode::{InodeType, Inode}, directory::Directory, file::File}, stored::Stored};
+use crate::{
+    global::AsyncGlobal,
+    inodes::{
+        directory::Directory,
+        file::File,
+        inode::{Inode, InodeType},
+    },
+    services::service::Service,
+    stored::Stored,
+};
 
-use super::html::routes::{directory_index::{DirectoryIndexProps, DirectoryIndex}, error_page::{ErrorPage, ErrorPageProps}};
-
+use super::html::routes::{
+    directory_index::{DirectoryIndex, DirectoryIndexProps},
+    error_page::{ErrorPage, ErrorPageProps},
+};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct HttpService {
@@ -42,27 +53,43 @@ pub struct ServerData {
     pub config: HttpService,
 }
 
-fn default_address() -> String { "127.0.0.1".to_string() }
-fn default_path() -> String { "/".to_string() }
-const fn fn_false() -> bool { false }
-const fn fn_true() -> bool { true }
-fn fn_style() -> String { "./style.css".to_string() }
-fn fn_script() -> String { "./script.js".to_string() }
+fn default_address() -> String {
+    "127.0.0.1".to_string()
+}
+fn default_path() -> String {
+    "/".to_string()
+}
+const fn fn_false() -> bool {
+    false
+}
+const fn fn_true() -> bool {
+    true
+}
+fn fn_style() -> String {
+    "./style.css".to_string()
+}
+fn fn_script() -> String {
+    "./script.js".to_string()
+}
 
 impl Service for HttpService {
     fn run(&self, global: Arc<AsyncGlobal>) {
-        let data = Arc::new(ServerData { global, config: self.clone() });
-        std::thread::spawn(move || {
-            match run_blocking(data) {
-                Ok(_) => {},
-                Err(e) => println!("Failed to run HTTP service: {}", e),
-            }
+        let data = Arc::new(ServerData {
+            global,
+            config: self.clone(),
+        });
+        std::thread::spawn(move || match run_blocking(data) {
+            Ok(_) => {}
+            Err(e) => println!("Failed to run HTTP service: {}", e),
         });
     }
 }
 
 fn run_blocking(data: Arc<ServerData>) -> Result<(), String> {
-    println!("Starting HTTP service on http://{}:{}", data.config.address, data.config.port);
+    println!(
+        "Starting HTTP service on http://{}:{}",
+        data.config.address, data.config.port
+    );
     let rt = tokio::runtime::Runtime::new().unwrap();
     let data_clone = data.clone();
     rt.block_on(async {
@@ -91,7 +118,7 @@ fn get_stored(path: &Vec<String>) -> Result<Stored, String> {
     let (bucket, descriptor) = match parts.len() {
         2 => (parts[0].to_string(), parts[1].to_string()),
         3 => (parts[0].to_string(), parts[1].to_string()),
-        _ => return Err("Invalid path".to_string())
+        _ => return Err("Invalid path".to_string()),
     };
     Stored::from_url(&bucket, &descriptor)
 }
@@ -99,14 +126,21 @@ fn get_stored(path: &Vec<String>) -> Result<Stored, String> {
 async fn get_inode(data: Arc<ServerData>, path: &Vec<String>) -> Result<InodeType, String> {
     let stored = get_stored(path)?;
 
-    let inode = stored.get::<InodeType, AsyncGlobal>(data.global.clone()).await?;
+    let inode = stored
+        .get::<InodeType, AsyncGlobal>(data.global.clone())
+        .await?;
 
     Ok(inode)
 }
 
-async fn render_directory(data: Arc<ServerData>, path: Vec<String>, directory: Directory, cookie: Option<cookie::Cookie<'static>>) -> HttpResponse {
-    let renderer: ServerRenderer<_> = ServerRenderer::<DirectoryIndex>::with_props(|| {
-        DirectoryIndexProps {
+async fn render_directory(
+    data: Arc<ServerData>,
+    path: Vec<String>,
+    directory: Directory,
+    cookie: Option<cookie::Cookie<'static>>,
+) -> HttpResponse {
+    let renderer: ServerRenderer<_> =
+        ServerRenderer::<DirectoryIndex>::with_props(|| DirectoryIndexProps {
             data,
             path,
             dir: directory,
@@ -117,23 +151,16 @@ async fn render_directory(data: Arc<ServerData>, path: Vec<String>, directory: D
                 }
             } else {
                 None
-            }
-        }
-    });
+            },
+        });
     let html = renderer.render().await;
 
-    HttpResponse::Ok()
-        .content_type("text/html")
-        .body(html)
+    HttpResponse::Ok().content_type("text/html").body(html)
 }
 
 async fn render_error(data: Arc<ServerData>, error: String) -> HttpResponse {
-    let renderer: ServerRenderer<_> = ServerRenderer::<ErrorPage>::with_props(|| {
-        ErrorPageProps {
-            data,
-            error
-        }
-    });
+    let renderer: ServerRenderer<_> =
+        ServerRenderer::<ErrorPage>::with_props(|| ErrorPageProps { data, error });
     let html = renderer.render().await;
 
     HttpResponse::ServiceUnavailable()
@@ -211,15 +238,28 @@ async fn redirect(data: web::Data<Arc<ServerData>>) -> impl Responder {
 }
 
 #[route("/files/{path:.*}", method = "GET")]
-async fn get(data: web::Data<Arc<ServerData>>, path: web::Path<String>, req: HttpRequest) -> impl Responder {
+async fn get(
+    data: web::Data<Arc<ServerData>>,
+    path: web::Path<String>,
+    req: HttpRequest,
+) -> impl Responder {
     let arc = data.as_ref().clone();
-    
+
     if !data.config.see_root && path.is_empty() {
-        return render_error(arc, "Unauthorized.\nYou can change the see_root setting in the config file.".to_string()).await;
+        return render_error(
+            arc,
+            "Unauthorized.\nYou can change the see_root setting in the config file.".to_string(),
+        )
+        .await;
     }
 
-    let path = path.into_inner().split('/').map(|part| part.to_string()).filter(|part| !part.is_empty()).collect::<Vec<String>>();
-    
+    let path = path
+        .into_inner()
+        .split('/')
+        .map(|part| part.to_string())
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<String>>();
+
     let inode = match path.is_empty() {
         true => arc.global.get_root().await.to_enum(),
         false => {
@@ -263,50 +303,70 @@ pub struct Upload {
 }
 
 #[route("/files/{path:.*}", method = "POST")]
-async fn post(data: web::Data<Arc<ServerData>>, path: web::Path<String>, form: MultipartForm<Upload>, req: HttpRequest) -> impl Responder {
+async fn post(
+    data: web::Data<Arc<ServerData>>,
+    path: web::Path<String>,
+    form: MultipartForm<Upload>,
+    req: HttpRequest,
+) -> impl Responder {
     let arc = data.as_ref().clone();
-    
+
     if data.config.readonly {
         return render_error(arc, "Server is in read-only mode.\nIf you are the server owner, you can disable this in the config file.".to_string()).await;
     }
 
     if data.config.see_root && path.is_empty() {
-        return render_error(arc, "Unauthorized.\nYou can change the see_root setting in the config file.".to_string()).await;
+        return render_error(
+            arc,
+            "Unauthorized.\nYou can change the see_root setting in the config file.".to_string(),
+        )
+        .await;
     }
 
-    let path = path.into_inner().split('/').map(|part| part.to_string()).filter(|part| !part.is_empty()).collect::<Vec<String>>();
+    let path = path
+        .into_inner()
+        .split('/')
+        .map(|part| part.to_string())
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<String>>();
 
     match &form.file {
-        Some(file) => return match post_got_file(arc.clone(), path, file).await {
-            Ok(response) => response,
-            Err(e) => render_error(arc, e).await,
-        },
-        None => {},
+        Some(file) => {
+            return match post_got_file(arc.clone(), path, file).await {
+                Ok(response) => response,
+                Err(e) => render_error(arc, e).await,
+            }
+        }
+        None => {}
     }
 
     match &form.directory_name {
-        Some(directory_name) => return match post_got_directory(arc.clone(), path, &directory_name.0).await {
-            Ok(response) => response,
-            Err(e) => render_error(arc, e).await,
-        },
-        None => {},
+        Some(directory_name) => {
+            return match post_got_directory(arc.clone(), path, &directory_name.0).await {
+                Ok(response) => response,
+                Err(e) => render_error(arc, e).await,
+            }
+        }
+        None => {}
     }
 
     match &form.request {
-        Some(request) => {
-            match request.0.as_str() {
-                "delete" => return match  post_got_delete(arc.clone(), path).await {
+        Some(request) => match request.0.as_str() {
+            "delete" => {
+                return match post_got_delete(arc.clone(), path).await {
                     Ok(response) => response,
                     Err(e) => render_error(arc, e).await,
-                },
-                "cut" => return match post_got_cut(arc.clone(), path).await {
-                    Ok(response) => response,
-                    Err(e) => render_error(arc, e).await,
-                },
-                _ => {},
+                }
             }
+            "cut" => {
+                return match post_got_cut(arc.clone(), path).await {
+                    Ok(response) => response,
+                    Err(e) => render_error(arc, e).await,
+                }
+            }
+            _ => {}
         },
-        None => {},
+        None => {}
     }
 
     if form.paste_name.is_some() {
@@ -314,26 +374,45 @@ async fn post(data: web::Data<Arc<ServerData>>, path: web::Path<String>, form: M
         if cookie.is_none() {
             return render_error(arc, "Invalid cookie".to_string()).await;
         }
-        return match post_got_paste(arc.clone(), path, form.paste_name.as_ref().unwrap().0.as_str().to_owned(), cookie.unwrap()).await {
+        return match post_got_paste(
+            arc.clone(),
+            path,
+            form.paste_name.as_ref().unwrap().0.as_str().to_owned(),
+            cookie.unwrap(),
+        )
+        .await
+        {
             Ok(response) => response,
             Err(e) => render_error(arc, e).await,
-        }
+        };
     }
 
     render_error(arc, "Invalid request".to_string()).await
 }
 
-async fn post_got_file(arc: Arc<ServerData>, path: Vec<String>, file: &Bytes) -> Result<HttpResponse, String> {
+async fn post_got_file(
+    arc: Arc<ServerData>,
+    path: Vec<String>,
+    file: &Bytes,
+) -> Result<HttpResponse, String> {
     let filename = match file.file_name.clone() {
         Some(name) => name,
-        None => { return Ok(HttpResponse::Found()
-            .append_header(("Location", format!("{}files/{}", arc.config.path, path.join("/"))))
-            .finish()) }
+        None => {
+            return Ok(HttpResponse::Found()
+                .append_header((
+                    "Location",
+                    format!("{}files/{}", arc.config.path, path.join("/")),
+                ))
+                .finish())
+        }
     };
 
     if file.data.is_empty() {
         return Ok(HttpResponse::Found()
-            .append_header(("Location", format!("{}files/{}", arc.config.path, path.join("/"))))
+            .append_header((
+                "Location",
+                format!("{}files/{}", arc.config.path, path.join("/")),
+            ))
             .finish());
     }
 
@@ -346,7 +425,12 @@ async fn post_got_file(arc: Arc<ServerData>, path: Vec<String>, file: &Bytes) ->
             Err(e) => return Err(e),
         };
 
-        directory = match stored.as_ref().unwrap().get::<InodeType, AsyncGlobal>(arc.global.clone()).await {
+        directory = match stored
+            .as_ref()
+            .unwrap()
+            .get::<InodeType, AsyncGlobal>(arc.global.clone())
+            .await
+        {
             Ok(InodeType::Directory(dir)) => dir,
             Ok(_) => Err("Path is not a directory".to_string())?,
             Err(e) => Err(e)?,
@@ -355,7 +439,7 @@ async fn post_got_file(arc: Arc<ServerData>, path: Vec<String>, file: &Bytes) ->
         directory = arc.global.get_root().await;
         stored = None;
     }
-    
+
     let bytes = file.data.to_vec();
 
     let file = match File::create(arc.global.clone(), bytes).await {
@@ -363,29 +447,37 @@ async fn post_got_file(arc: Arc<ServerData>, path: Vec<String>, file: &Bytes) ->
         Err(e) => Err(e)?,
     };
 
-    match directory.add(arc.global.clone(), &filename, file.to_enum()).await {
-        Ok(_) => {},
+    match directory
+        .add(arc.global.clone(), &filename, file.to_enum())
+        .await
+    {
+        Ok(_) => {}
         Err(e) => Err(e)?,
     };
 
     match stored {
         Some(stored) => {
             match stored.put(arc.global.clone(), directory.to_enum()).await {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => Err(e)?,
             };
         }
-        None => {
-            arc.global.save_root(&directory).await
-        }
+        None => arc.global.save_root(&directory).await,
     }
 
     Ok(HttpResponse::Found()
-        .append_header(("Location", format!("{}files/{}", arc.config.path, path.join("/"))))
+        .append_header((
+            "Location",
+            format!("{}files/{}", arc.config.path, path.join("/")),
+        ))
         .finish())
 }
 
-async fn post_got_directory(arc: Arc<ServerData>, path: Vec<String>, directory_name: &String) -> Result<HttpResponse, String> {
+async fn post_got_directory(
+    arc: Arc<ServerData>,
+    path: Vec<String>,
+    directory_name: &String,
+) -> Result<HttpResponse, String> {
     let mut directory;
     let stored: Option<Stored>;
 
@@ -395,7 +487,12 @@ async fn post_got_directory(arc: Arc<ServerData>, path: Vec<String>, directory_n
             Err(e) => Err(e)?,
         };
 
-        directory = match stored.as_ref().unwrap().get::<InodeType, AsyncGlobal>(arc.global.clone()).await {
+        directory = match stored
+            .as_ref()
+            .unwrap()
+            .get::<InodeType, AsyncGlobal>(arc.global.clone())
+            .await
+        {
             Ok(InodeType::Directory(dir)) => dir,
             Ok(_) => Err("Path is not a directory".to_string())?,
             Err(e) => Err(e)?,
@@ -405,25 +502,33 @@ async fn post_got_directory(arc: Arc<ServerData>, path: Vec<String>, directory_n
         stored = None;
     }
 
-    match directory.add(arc.global.clone(), directory_name, Directory::new().to_enum()).await {
-        Ok(_) => {},
+    match directory
+        .add(
+            arc.global.clone(),
+            directory_name,
+            Directory::new().to_enum(),
+        )
+        .await
+    {
+        Ok(_) => {}
         Err(e) => Err(e)?,
     };
 
     match stored {
         Some(stored) => {
             match stored.put(arc.global.clone(), directory.to_enum()).await {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => Err(e)?,
             };
         }
-        None => {
-            arc.global.save_root(&directory).await
-        }
+        None => arc.global.save_root(&directory).await,
     }
 
     Ok(HttpResponse::Found()
-        .append_header(("Location", format!("{}files/{}", arc.config.path, path.join("/"))))
+        .append_header((
+            "Location",
+            format!("{}files/{}", arc.config.path, path.join("/")),
+        ))
         .finish())
 }
 
@@ -432,7 +537,7 @@ async fn post_got_delete(arc: Arc<ServerData>, path: Vec<String>) -> Result<Http
         return Err("Invalid path".to_string());
     }
 
-    let parent_path = path[..path.len()-1].to_vec();
+    let parent_path = path[..path.len() - 1].to_vec();
     let file = match path.last() {
         Some(filename) => filename.split('$').collect::<Vec<&str>>(),
         None => Err("Invalid path".to_string())?,
@@ -458,7 +563,12 @@ async fn post_got_delete(arc: Arc<ServerData>, path: Vec<String>) -> Result<Http
             Err(e) => Err(e)?,
         };
 
-        directory = match stored.as_ref().unwrap().get::<InodeType, AsyncGlobal>(arc.global.clone()).await {
+        directory = match stored
+            .as_ref()
+            .unwrap()
+            .get::<InodeType, AsyncGlobal>(arc.global.clone())
+            .await
+        {
             Ok(InodeType::Directory(dir)) => dir,
             Ok(_) => Err("Path is not a directory".to_string())?,
             Err(e) => Err(e)?,
@@ -479,32 +589,41 @@ async fn post_got_delete(arc: Arc<ServerData>, path: Vec<String>) -> Result<Http
     }
 
     if stored.is_some() {
-        match stored.unwrap().put(arc.global.clone(), directory.to_enum()).await {
-            Ok(_) => {},
+        match stored
+            .unwrap()
+            .put(arc.global.clone(), directory.to_enum())
+            .await
+        {
+            Ok(_) => {}
             Err(e) => Err(e)?,
         };
     } else {
         arc.global.save_root(&directory).await
     }
 
-    let mut inode = match removed.get::<InodeType, AsyncGlobal>(arc.global.clone()).await {
+    let mut inode = match removed
+        .get::<InodeType, AsyncGlobal>(arc.global.clone())
+        .await
+    {
         Ok(inode) => inode,
         Err(e) => Err(e)?,
     };
-    
+
     match inode.delete(arc.global.clone()).await {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => Err(e)?,
     }
 
     match removed.delete(arc.global.clone()).await {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => Err(e)?,
     }
-    
 
     Ok(HttpResponse::Found()
-        .append_header(("Location", format!("{}files/{}", arc.config.path, parent_path.join("/"))))
+        .append_header((
+            "Location",
+            format!("{}files/{}", arc.config.path, parent_path.join("/")),
+        ))
         .finish())
 }
 
@@ -513,7 +632,7 @@ async fn post_got_cut(arc: Arc<ServerData>, path: Vec<String>) -> Result<HttpRes
         return Err("Invalid path".to_string());
     }
 
-    let parent_path = path[..path.len()-1].to_vec();
+    let parent_path = path[..path.len() - 1].to_vec();
     let file = match path.last() {
         Some(filename) => filename.split('$').collect::<Vec<&str>>(),
         None => Err("Invalid path".to_string())?,
@@ -539,7 +658,12 @@ async fn post_got_cut(arc: Arc<ServerData>, path: Vec<String>) -> Result<HttpRes
             Err(e) => Err(e)?,
         };
 
-        directory = match stored.as_ref().unwrap().get::<InodeType, AsyncGlobal>(arc.global.clone()).await {
+        directory = match stored
+            .as_ref()
+            .unwrap()
+            .get::<InodeType, AsyncGlobal>(arc.global.clone())
+            .await
+        {
             Ok(InodeType::Directory(dir)) => dir,
             Ok(_) => Err("Path is not a directory".to_string())?,
             Err(e) => Err(e)?,
@@ -560,8 +684,12 @@ async fn post_got_cut(arc: Arc<ServerData>, path: Vec<String>) -> Result<HttpRes
     }
 
     if stored.is_some() {
-        match stored.unwrap().put(arc.global.clone(), directory.to_enum()).await {
-            Ok(_) => {},
+        match stored
+            .unwrap()
+            .put(arc.global.clone(), directory.to_enum())
+            .await
+        {
+            Ok(_) => {}
             Err(e) => Err(e)?,
         };
     } else {
@@ -575,11 +703,19 @@ async fn post_got_cut(arc: Arc<ServerData>, path: Vec<String>) -> Result<HttpRes
 
     Ok(HttpResponse::Found()
         .cookie(cookie)
-        .append_header(("Location", format!("{}files/{}", arc.config.path, parent_path.join("/"))))
+        .append_header((
+            "Location",
+            format!("{}files/{}", arc.config.path, parent_path.join("/")),
+        ))
         .finish())
 }
 
-async fn post_got_paste(arc: Arc<ServerData>, path: Vec<String>, paste_name: String, cookie: cookie::Cookie<'static>) -> Result<HttpResponse, String> {
+async fn post_got_paste(
+    arc: Arc<ServerData>,
+    path: Vec<String>,
+    paste_name: String,
+    cookie: cookie::Cookie<'static>,
+) -> Result<HttpResponse, String> {
     let mut directory;
     let stored: Option<Stored>;
 
@@ -599,7 +735,12 @@ async fn post_got_paste(arc: Arc<ServerData>, path: Vec<String>, paste_name: Str
             Err(e) => Err(e)?,
         };
 
-        directory = match stored.as_ref().unwrap().get::<InodeType, AsyncGlobal>(arc.global.clone()).await {
+        directory = match stored
+            .as_ref()
+            .unwrap()
+            .get::<InodeType, AsyncGlobal>(arc.global.clone())
+            .await
+        {
             Ok(InodeType::Directory(dir)) => dir,
             Ok(_) => Err("Path is not a directory".to_string())?,
             Err(e) => Err(e)?,
@@ -610,33 +751,34 @@ async fn post_got_paste(arc: Arc<ServerData>, path: Vec<String>, paste_name: Str
     }
 
     match directory.put(&paste_name, paste_stored) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => Err(e)?,
     };
 
     match stored.clone() {
         Some(stored) => {
             match stored.put(arc.global.clone(), directory.to_enum()).await {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => Err(e)?,
             };
         }
-        None => {
-            arc.global.save_root(&directory).await
-        }
+        None => arc.global.save_root(&directory).await,
     }
 
     let directory = match stored {
         Some(stored) => {
-            match stored.get::<InodeType, AsyncGlobal>(arc.global.clone()).await {
+            match stored
+                .get::<InodeType, AsyncGlobal>(arc.global.clone())
+                .await
+            {
                 Ok(InodeType::Directory(dir)) => dir,
                 Ok(_) => Err("Path is not a directory".to_string())?,
                 Err(e) => Err(e)?,
             }
         }
-        None => arc.global.get_root().await
+        None => arc.global.get_root().await,
     };
-    
+
     let c = cookie::Cookie::build("cut-inode", "")
         .path(arc.config.path.clone())
         .max_age(cookie::time::Duration::seconds(1))
@@ -644,7 +786,7 @@ async fn post_got_paste(arc: Arc<ServerData>, path: Vec<String>, paste_name: Str
 
     let mut page = render_directory(arc, path, directory, None).await;
     match page.add_removal_cookie(&c) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => Err(format!("Failed to add cookie: {}", e))?,
     }
 

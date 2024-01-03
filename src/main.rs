@@ -1,6 +1,6 @@
-use global::{Global, AsyncGlobal, BlockingGlobal};
+use global::{AsyncGlobal, BlockingGlobal, Global};
 use serde_yaml::from_reader;
-use std::env::{var, args};
+use std::env::{args, var};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -10,15 +10,15 @@ mod bucket;
 mod encryption;
 mod global;
 mod inodes;
-mod services;
-mod sources;
-mod shell;
-mod stored;
 mod s3;
+mod services;
+mod shell;
+mod sources;
+mod stored;
 
 #[cfg(test)]
 mod tests; // this is only included when running tests
-/* #endregion */
+           /* #endregion */
 
 // these will be checked if CD_CONFIG_PATH is not set
 const CONFIG_PATHS: [&str; 1] = ["./config.yml"];
@@ -48,16 +48,17 @@ fn main() {
     ctrlc::set_handler(move || {
         println!("Ctrl+C received...");
         main_thread_handle.unpark();
-    }).expect("Error setting Ctrl-C handler");
+    })
+    .expect("Error setting Ctrl-C handler");
 
     // if run with --shell, start the shell
     if args().any(|arg| arg == "--shell") {
         let bglobal = Arc::new(BlockingGlobal::new(global));
         shell::shell(bglobal);
-    } else { // otherwise, start services
+    } else {
+        // otherwise, start services
         let aglobal = Arc::new(AsyncGlobal::new(global));
         global::run_services(aglobal);
         std::thread::park();
     }
-
 }

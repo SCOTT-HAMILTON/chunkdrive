@@ -1,17 +1,25 @@
-use std::{sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::{StreamExt, stream::BoxStream};
-use serde::{Serialize, Deserialize};
+use futures::{stream::BoxStream, StreamExt};
+use serde::{Deserialize, Serialize};
 
-use crate::{blocks::{indirect_block::IndirectBlock, block::{Block, BlockType}}, global::GlobalTrait};
-use super::{inode::{Inode, InodeType}, metadata::{Metadata, Size}};
-
+use super::{
+    inode::{Inode, InodeType},
+    metadata::{Metadata, Size},
+};
+use crate::{
+    blocks::{
+        block::{Block, BlockType},
+        indirect_block::IndirectBlock,
+    },
+    global::GlobalTrait,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct File {
     pub data: IndirectBlock,
-    pub metadata: Metadata
+    pub metadata: Metadata,
 }
 
 #[async_trait]
@@ -20,7 +28,10 @@ impl Inode for File {
         &self.metadata
     }
 
-    async fn delete<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&mut self, global: Arc<U>) -> Result<(), String> {
+    async fn delete<U: GlobalTrait + std::marker::Send + std::marker::Sync>(
+        &mut self,
+        global: Arc<U>,
+    ) -> Result<(), String> {
         self.data.delete(global).await
     }
 }
@@ -30,7 +41,10 @@ impl File {
         InodeType::File(self)
     }
 
-    pub async fn create<U: GlobalTrait + std::marker::Send + std::marker::Sync>(global: Arc<U>, data: Vec<u8>) -> Result<Self, String> {
+    pub async fn create<U: GlobalTrait + std::marker::Send + std::marker::Sync>(
+        global: Arc<U>,
+        data: Vec<u8>,
+    ) -> Result<Self, String> {
         let size = data.len();
         let block = match IndirectBlock::create(global, data, 0).await? {
             BlockType::Indirect(block) => block,
@@ -40,11 +54,14 @@ impl File {
         metadata.size = Size::Bytes(size);
         Ok(Self {
             data: block,
-            metadata
+            metadata,
         })
     }
 
-    pub fn get<'a, U: GlobalTrait + std::marker::Send + std::marker::Sync + 'a>(&'a self, global: Arc<U>) -> BoxStream<'a, Result<Vec<u8>, String>> {
+    pub fn get<'a, U: GlobalTrait + std::marker::Send + std::marker::Sync + 'a>(
+        &'a self,
+        global: Arc<U>,
+    ) -> BoxStream<'a, Result<Vec<u8>, String>> {
         Box::pin(async_stream::stream! {
             let range = self.data.range(global.clone()).await?;
             let mut stream = self.data.get(global.clone(), range.clone());
