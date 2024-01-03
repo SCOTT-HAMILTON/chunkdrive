@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use futures::stream::{BoxStream, StreamExt};
 use serde::{Serialize, Deserialize};
 
-use crate::global::Global;
+use crate::global::GlobalTrait;
 use super::{block::{Block, BlockType}, direct_block::DirectBlock, stored_block::StoredBlock};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -15,7 +15,7 @@ pub struct IndirectBlock {
 
 #[async_trait]
 impl Block for IndirectBlock {
-    async fn range(&self, global: Arc<Global>) -> Result<Range<usize>, String> {
+    async fn range<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&self, global: Arc<U>) -> Result<Range<usize>, String> {
         let first = match self.blocks.first() {
             Some(block) => block,
             None => return Ok(0..0),
@@ -31,7 +31,7 @@ impl Block for IndirectBlock {
         Ok(first_range.start..last_range.end)
     }
 
-    fn get(&self, global: Arc<Global>, range: Range<usize>) -> BoxStream<Result<Vec<u8>, String>> {
+    fn get<'a, U: GlobalTrait + std::marker::Send + std::marker::Sync + 'a>(&'a self, global: Arc<U>, range: Range<usize>) -> BoxStream<'a, Result<Vec<u8>, String>> {
         Box::pin(async_stream::stream! {
             for block in self.blocks.iter() {
                 let global_clone = global.clone();
@@ -44,7 +44,7 @@ impl Block for IndirectBlock {
         })
     }
 
-    async fn put(&mut self, global: Arc<Global>, data: Vec<u8>, range: Range<usize>) -> Result<(), String> {
+    async fn put<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&mut self, global: Arc<U>, data: Vec<u8>, range: Range<usize>) -> Result<(), String> {
         let start_offset = range.start;
         let mut start = range.start;
         
@@ -62,7 +62,7 @@ impl Block for IndirectBlock {
         };
 
         // if data is left, we create new blocks just like we did in the create function
-        while start < range.end && self.blocks.len() < global.direct_block_count {
+        while start < range.end && self.blocks.len() < global.get_direct_block_count() {
             let block = DirectBlock::create(global.clone(), data[(start-start_offset)..].to_vec(), start).await?;
             let range = block.range(global.clone()).await?;
             start = range.end;
@@ -79,7 +79,7 @@ impl Block for IndirectBlock {
         Ok(())
     }
 
-    async fn delete(&self, global: Arc<Global>) -> Result<(), String> {
+    async fn delete<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&self, global: Arc<U>) -> Result<(), String> {
         let mut errors= Vec::new();
         for block in self.blocks.iter() {
             match block.delete(global.clone()).await {
@@ -94,7 +94,7 @@ impl Block for IndirectBlock {
         }
     }
 
-    async fn create(global: Arc<Global>, data: Vec<u8>, start: usize) -> Result<BlockType, String> {
+    async fn create<U: GlobalTrait + std::marker::Send + std::marker::Sync>(global: Arc<U>, data: Vec<u8>, start: usize) -> Result<BlockType, String> {
 
         let mut blocks = Vec::new(); // we will make sure that these are in order
         let slice_offset = start;
@@ -102,7 +102,7 @@ impl Block for IndirectBlock {
         let end = start + data.len();
 
         let mut error: Option<String> = None;
-        while start < end && blocks.len() < global.direct_block_count {
+        while start < end && blocks.len() < global.get_direct_block_count() {
             let block = DirectBlock::create(global.clone(), data[(start-slice_offset)..].to_vec(), start).await?;
             let range = match block.range(global.clone()).await {
                 Ok(range) => range,

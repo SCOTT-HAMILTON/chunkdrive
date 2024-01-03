@@ -6,7 +6,7 @@ use actix_multipart::form::{MultipartForm, bytes::Bytes, text::Text};
 use tokio::io::AsyncReadExt;
 use yew::ServerRenderer;
 
-use crate::{global::Global, services::service::Service, inodes::{inode::{InodeType, Inode}, directory::Directory, file::File}, stored::Stored};
+use crate::{global::AsyncGlobal, services::service::Service, inodes::{inode::{InodeType, Inode}, directory::Directory, file::File}, stored::Stored};
 
 use super::html::routes::{directory_index::{DirectoryIndexProps, DirectoryIndex}, error_page::{ErrorPage, ErrorPageProps}};
 
@@ -38,7 +38,7 @@ pub struct HttpService {
 
 #[derive(Debug)]
 pub struct ServerData {
-    pub global: Arc<Global>,
+    pub global: Arc<AsyncGlobal>,
     pub config: HttpService,
 }
 
@@ -50,7 +50,7 @@ fn fn_style() -> String { "./style.css".to_string() }
 fn fn_script() -> String { "./script.js".to_string() }
 
 impl Service for HttpService {
-    fn run(&self, global: Arc<Global>) {
+    fn run(&self, global: Arc<AsyncGlobal>) {
         let data = Arc::new(ServerData { global, config: self.clone() });
         std::thread::spawn(move || {
             match run_blocking(data) {
@@ -99,7 +99,7 @@ fn get_stored(path: &Vec<String>) -> Result<Stored, String> {
 async fn get_inode(data: Arc<ServerData>, path: &Vec<String>) -> Result<InodeType, String> {
     let stored = get_stored(path)?;
 
-    let inode = stored.get::<InodeType>(data.global.clone()).await?;
+    let inode = stored.get::<InodeType, AsyncGlobal>(data.global.clone()).await?;
 
     Ok(inode)
 }
@@ -221,7 +221,7 @@ async fn get(data: web::Data<Arc<ServerData>>, path: web::Path<String>, req: Htt
     let path = path.into_inner().split('/').map(|part| part.to_string()).filter(|part| !part.is_empty()).collect::<Vec<String>>();
     
     let inode = match path.is_empty() {
-        true => arc.global.get_root().to_enum(),
+        true => arc.global.get_root().await.to_enum(),
         false => {
             let inode = get_inode(arc.clone(), &path).await;
             match inode {
@@ -346,13 +346,13 @@ async fn post_got_file(arc: Arc<ServerData>, path: Vec<String>, file: &Bytes) ->
             Err(e) => return Err(e),
         };
 
-        directory = match stored.as_ref().unwrap().get::<InodeType>(arc.global.clone()).await {
+        directory = match stored.as_ref().unwrap().get::<InodeType, AsyncGlobal>(arc.global.clone()).await {
             Ok(InodeType::Directory(dir)) => dir,
             Ok(_) => Err("Path is not a directory".to_string())?,
             Err(e) => Err(e)?,
         };
     } else {
-        directory = arc.global.get_root();
+        directory = arc.global.get_root().await;
         stored = None;
     }
     
@@ -376,7 +376,7 @@ async fn post_got_file(arc: Arc<ServerData>, path: Vec<String>, file: &Bytes) ->
             };
         }
         None => {
-            arc.global.save_root(&directory)
+            arc.global.save_root(&directory).await
         }
     }
 
@@ -395,13 +395,13 @@ async fn post_got_directory(arc: Arc<ServerData>, path: Vec<String>, directory_n
             Err(e) => Err(e)?,
         };
 
-        directory = match stored.as_ref().unwrap().get::<InodeType>(arc.global.clone()).await {
+        directory = match stored.as_ref().unwrap().get::<InodeType, AsyncGlobal>(arc.global.clone()).await {
             Ok(InodeType::Directory(dir)) => dir,
             Ok(_) => Err("Path is not a directory".to_string())?,
             Err(e) => Err(e)?,
         };
     } else {
-        directory = arc.global.get_root();
+        directory = arc.global.get_root().await;
         stored = None;
     }
 
@@ -418,7 +418,7 @@ async fn post_got_directory(arc: Arc<ServerData>, path: Vec<String>, directory_n
             };
         }
         None => {
-            arc.global.save_root(&directory)
+            arc.global.save_root(&directory).await
         }
     }
 
@@ -458,13 +458,13 @@ async fn post_got_delete(arc: Arc<ServerData>, path: Vec<String>) -> Result<Http
             Err(e) => Err(e)?,
         };
 
-        directory = match stored.as_ref().unwrap().get::<InodeType>(arc.global.clone()).await {
+        directory = match stored.as_ref().unwrap().get::<InodeType, AsyncGlobal>(arc.global.clone()).await {
             Ok(InodeType::Directory(dir)) => dir,
             Ok(_) => Err("Path is not a directory".to_string())?,
             Err(e) => Err(e)?,
         };
     } else {
-        directory = arc.global.get_root();
+        directory = arc.global.get_root().await;
         stored = None;
     }
 
@@ -484,10 +484,10 @@ async fn post_got_delete(arc: Arc<ServerData>, path: Vec<String>) -> Result<Http
             Err(e) => Err(e)?,
         };
     } else {
-        arc.global.save_root(&directory)
+        arc.global.save_root(&directory).await
     }
 
-    let mut inode = match removed.get::<InodeType>(arc.global.clone()).await {
+    let mut inode = match removed.get::<InodeType, AsyncGlobal>(arc.global.clone()).await {
         Ok(inode) => inode,
         Err(e) => Err(e)?,
     };
@@ -539,13 +539,13 @@ async fn post_got_cut(arc: Arc<ServerData>, path: Vec<String>) -> Result<HttpRes
             Err(e) => Err(e)?,
         };
 
-        directory = match stored.as_ref().unwrap().get::<InodeType>(arc.global.clone()).await {
+        directory = match stored.as_ref().unwrap().get::<InodeType, AsyncGlobal>(arc.global.clone()).await {
             Ok(InodeType::Directory(dir)) => dir,
             Ok(_) => Err("Path is not a directory".to_string())?,
             Err(e) => Err(e)?,
         };
     } else {
-        directory = arc.global.get_root();
+        directory = arc.global.get_root().await;
         stored = None;
     }
 
@@ -565,7 +565,7 @@ async fn post_got_cut(arc: Arc<ServerData>, path: Vec<String>) -> Result<HttpRes
             Err(e) => Err(e)?,
         };
     } else {
-        arc.global.save_root(&directory)
+        arc.global.save_root(&directory).await
     }
 
     let cookie = cookie::Cookie::build("cut-inode", unlinked.as_url())
@@ -599,13 +599,13 @@ async fn post_got_paste(arc: Arc<ServerData>, path: Vec<String>, paste_name: Str
             Err(e) => Err(e)?,
         };
 
-        directory = match stored.as_ref().unwrap().get::<InodeType>(arc.global.clone()).await {
+        directory = match stored.as_ref().unwrap().get::<InodeType, AsyncGlobal>(arc.global.clone()).await {
             Ok(InodeType::Directory(dir)) => dir,
             Ok(_) => Err("Path is not a directory".to_string())?,
             Err(e) => Err(e)?,
         };
     } else {
-        directory = arc.global.get_root();
+        directory = arc.global.get_root().await;
         stored = None;
     }
 
@@ -622,19 +622,19 @@ async fn post_got_paste(arc: Arc<ServerData>, path: Vec<String>, paste_name: Str
             };
         }
         None => {
-            arc.global.save_root(&directory)
+            arc.global.save_root(&directory).await
         }
     }
 
     let directory = match stored {
         Some(stored) => {
-            match stored.get::<InodeType>(arc.global.clone()).await {
+            match stored.get::<InodeType, AsyncGlobal>(arc.global.clone()).await {
                 Ok(InodeType::Directory(dir)) => dir,
                 Ok(_) => Err("Path is not a directory".to_string())?,
                 Err(e) => Err(e)?,
             }
         }
-        None => arc.global.get_root()
+        None => arc.global.get_root().await
     };
     
     let c = cookie::Cookie::build("cut-inode", "")

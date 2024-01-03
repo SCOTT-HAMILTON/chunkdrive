@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::{StreamExt, stream::BoxStream};
 use serde::{Serialize, Deserialize};
 
-use crate::{global::Global, blocks::block::{Block, BlockType}, stored::Stored};
+use crate::{global::GlobalTrait, blocks::block::{Block, BlockType}, stored::Stored};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StoredBlock {
@@ -17,20 +17,20 @@ pub struct StoredBlock {
 
 #[async_trait]
 impl Block for StoredBlock {
-    async fn range(&self, global: Arc<Global>) -> Result<Range<usize>, String> {
-        self.stored.get::<BlockType>(global.clone()).await?.range(global).await
+    async fn range<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&self, global: Arc<U>) -> Result<Range<usize>, String> {
+        self.stored.get::<BlockType, U>(global.clone()).await?.range(global).await
     }
 
-    async fn put(&mut self, global: Arc<Global>, data: Vec<u8>, range: Range<usize>) -> Result<(), String> {
-        let mut block = self.stored.get::<BlockType>(global.clone()).await?;
+    async fn put<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&mut self, global: Arc<U>, data: Vec<u8>, range: Range<usize>) -> Result<(), String> {
+        let mut block = self.stored.get::<BlockType, U>(global.clone()).await?;
         block.put(global.clone(), data, range).await?;
         self.stored.put(global, block).await
     }
 
-    fn get(&self, global: Arc<Global>, range: Range<usize>) -> BoxStream<Result<Vec<u8>, String>> {
+    fn get<'a, U: GlobalTrait + std::marker::Send + std::marker::Sync + 'a>(&'a self, global: Arc<U>, range: Range<usize>) -> BoxStream<'a, Result<Vec<u8>, String>> {
         Box::pin(async_stream::stream! {
             let global = global.clone();
-            let block = self.stored.get::<BlockType>(global.clone()).await?;
+            let block = self.stored.get::<BlockType, U>(global.clone()).await?;
             let mut stream = block.get(global, range.clone());
             while let Some(chunk) = stream.next().await {
                 yield chunk;
@@ -38,9 +38,9 @@ impl Block for StoredBlock {
         })
     }
 
-    async fn delete(&self, global: Arc<Global>) -> Result<(), String> {
+    async fn delete<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&self, global: Arc<U>) -> Result<(), String> {
         let mut errors = Vec::new();
-        match self.stored.get::<BlockType>(global.clone()).await.unwrap().delete(global.clone()).await {
+        match self.stored.get::<BlockType, U>(global.clone()).await.unwrap().delete(global.clone()).await {
             Ok(_) => (),
             Err(e) => errors.push(e)
         }
@@ -55,7 +55,7 @@ impl Block for StoredBlock {
         }
     }
 
-    async fn create(global: Arc<Global>, data: Vec<u8>, start: usize) -> Result<BlockType, String> {
+    async fn create<U: GlobalTrait + std::marker::Send + std::marker::Sync>(global: Arc<U>, data: Vec<u8>, start: usize) -> Result<BlockType, String> {
         let block = BlockType::create(global.clone(), data, start).await?;
         let stored = Stored::create(global.clone(), block).await?;
         Ok(BlockType::Stored(StoredBlock {

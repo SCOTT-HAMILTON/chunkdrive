@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 use async_trait::async_trait;
 use serde::{Serialize, Deserialize};
 
-use crate::{stored::Stored, global::Global};
+use crate::{stored::Stored, global::GlobalTrait};
 use super::{inode::{Inode, InodeType}, metadata::{Metadata, Size}};
 
 
@@ -25,10 +25,10 @@ impl Inode for Directory {
         &self.metadata
     }
 
-    async fn delete(&mut self, global: Arc<Global>) -> Result<(), String> {
+    async fn delete<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&mut self, global: Arc<U>) -> Result<(), String> {
         let mut errors = Vec::new();
         for (_, stored) in self.children.drain() {
-            match &mut stored.get::<InodeType>(global.clone()).await {
+            match &mut stored.get::<InodeType, U>(global.clone()).await {
                 Ok(inode) => match inode.delete(global.clone()).await {
                     Ok(_) => (),
                     Err(e) => errors.push(e)
@@ -59,7 +59,7 @@ impl Directory {
         InodeType::Directory(self)
     }
 
-    pub async fn add(&mut self, global: Arc<Global>, name: &String, inode: InodeType) -> Result<(), String> {
+    pub async fn add<U: GlobalTrait>(&mut self, global: Arc<U>, name: &String, inode: InodeType) -> Result<(), String> {
         if self.children.contains_key(name) {
             return Err(format!("File {} already exists", name));
         }
@@ -72,7 +72,7 @@ impl Directory {
         Ok(())
     }
 
-    pub async fn remove(&mut self, global: Arc<Global>, name: &String) -> Result<(), String> {
+    pub async fn remove<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&mut self, global: Arc<U>, name: &String) -> Result<(), String> {
         if !self.children.contains_key(name) {
             return Err(format!("File {} does not exist", name));
         }

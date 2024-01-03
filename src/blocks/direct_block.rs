@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use futures::stream::BoxStream;
 use serde::{Serialize, Deserialize};
 
-use crate::global::{Global, Descriptor};
+use crate::global::{GlobalTrait, Descriptor};
 use super::block::{Block, BlockType};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,11 +23,11 @@ pub struct DirectBlock {
 
 #[async_trait]
 impl Block for DirectBlock {
-    async fn range(&self, _global: Arc<Global>) -> Result<Range<usize>, String> {
+    async fn range<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&self, _global: Arc<U>) -> Result<Range<usize>, String> {
         Ok(self.range.clone())
     }
 
-    fn get(&self, global: Arc<Global>, range: Range<usize>) -> BoxStream<Result<Vec<u8>, String>> {
+    fn get<'a, U: GlobalTrait + std::marker::Send + std::marker::Sync + 'a>(&'a self, global: Arc<U>, range: Range<usize>) -> BoxStream<'a, Result<Vec<u8>, String>> {
         Box::pin(async_stream::stream! {
             if range.end <= self.range.start || range.start >= self.range.end {
                 return // the range is outside of the block, so we return an empty stream
@@ -50,7 +50,7 @@ impl Block for DirectBlock {
     }
 
     // indirect blocks ensure that the data.length == range.length && data[0] corresponds to range.start
-    async fn put(&mut self, global: Arc<Global>, data: Vec<u8>, _range: Range<usize>) -> Result<(), String> {
+    async fn put<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&mut self, global: Arc<U>, data: Vec<u8>, _range: Range<usize>) -> Result<(), String> {
         // put the data
         let bucket = match global.get_bucket(&self.bucket) {
             Some(bucket) => bucket,
@@ -62,7 +62,7 @@ impl Block for DirectBlock {
         }
     }
 
-    async fn delete(&self, global: Arc<Global>) -> Result<(), String> {
+    async fn delete<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&self, global: Arc<U>) -> Result<(), String> {
         let bucket = match global.get_bucket(&self.bucket) {
             Some(bucket) => bucket,
             None => return Err("Bucket not found".to_string())
@@ -70,7 +70,7 @@ impl Block for DirectBlock {
         bucket.delete(&self.descriptor).await
     }
 
-    async fn create(global: Arc<Global>, data: Vec<u8>, start: usize) -> Result<BlockType, String> {
+    async fn create<U: GlobalTrait + std::marker::Send + std::marker::Sync>(global: Arc<U>, data: Vec<u8>, start: usize) -> Result<BlockType, String> {
         // finding the buckets
         let bucket_name = global.random_bucket().ok_or("No buckets found".to_string())?;
         let bucket = match global.get_bucket(bucket_name) {

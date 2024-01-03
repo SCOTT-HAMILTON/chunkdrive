@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use serde::{Serialize, Deserialize};
 use rmp_serde::{Serializer, Deserializer};
-use crate::global::{Global, Descriptor};
+use crate::global::{Descriptor, GlobalTrait};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Stored {
@@ -25,7 +25,7 @@ impl PartialEq for Stored {
 }
 
 impl Stored {
-    pub async fn get<T: Deserialize<'static>>(&self, global: Arc<Global>) -> Result<T, String> {
+    pub async fn get<T: Deserialize<'static>, U: GlobalTrait>(&self, global: Arc<U>) -> Result<T, String> {
         // Get bucket
         let bucket = global.get_bucket(&self.bucket).ok_or("Bucket not found")?;
 
@@ -38,7 +38,7 @@ impl Stored {
         T::deserialize(&mut deserializer).map_err(|e| e.to_string())
     }
 
-    pub async fn put<T: Serialize>(&self, global: Arc<Global>, data: T) -> Result<(), String> {
+    pub async fn put<T: Serialize, U:GlobalTrait>(&self, global: Arc<U>, data: T) -> Result<(), String> {
         // Serialize data
         let mut serializer = Serializer::new(Vec::new())
             .with_struct_map(); // https://github.com/3Hren/msgpack-rust/issues/318
@@ -55,7 +55,7 @@ impl Stored {
         Ok(())
     }
 
-    pub async fn create<T: Serialize>(global: Arc<Global>, data: T) -> Result<Stored, String> {
+    pub async fn create<T: Serialize, U: GlobalTrait>(global: Arc<U>, data: T) -> Result<Stored, String> {
         // Serialize data
         let mut serializer = Serializer::new(Vec::new())
             .with_struct_map(); // https://github.com/3Hren/msgpack-rust/issues/318
@@ -77,7 +77,7 @@ impl Stored {
         })
     }
 
-    pub async fn delete(&self, global: Arc<Global>) -> Result<(), String> {
+    pub async fn delete<U: GlobalTrait>(&self, global: Arc<U>) -> Result<(), String> {
         // Get bucket
         let bucket = global.get_bucket(&self.bucket).ok_or("Bucket not found")?;
         

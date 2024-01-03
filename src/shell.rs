@@ -2,8 +2,9 @@ use std::{sync::Arc, io::{Write, BufReader, Read}};
 use liner::{Context, Completer};
 use futures::StreamExt;
 use tokio::runtime::Runtime;
+use crate::global::GlobalTrait;
 
-use crate::{global::Global, inodes::{directory::Directory, inode::{InodeType, Inode}, metadata::Metadata, file::File}, stored::Stored};
+use crate::{global::BlockingGlobal, inodes::{directory::Directory, inode::{InodeType, Inode}, metadata::Metadata, file::File}, stored::Stored};
 
 fn tokenize_line(line: &str) -> Vec<String> {
     let mut tokens = Vec::new();
@@ -50,7 +51,7 @@ impl Completer for ShellCompleter {
     }
 }
 
-pub fn shell(global: Arc<Global>) {
+pub fn shell(global: Arc<BlockingGlobal>) {
     println!("Welcome to the ChunkDrive {} debug shell! Type \"help\" for a list of commands.", env!("CARGO_PKG_VERSION"));
 
     let mut path: Vec<String> = Vec::new();
@@ -101,7 +102,7 @@ pub fn shell(global: Arc<Global>) {
     }
 }
 
-type Command = (&'static str, fn(&Arc<Global>, Vec<String>, &mut Vec<String>, &mut Vec<Stored>, &mut Option<Stored>) -> Result<(), String>, &'static str);
+type Command = (&'static str, fn(&Arc<BlockingGlobal>, Vec<String>, &mut Vec<String>, &mut Vec<Stored>, &mut Option<Stored>) -> Result<(), String>, &'static str);
 
 const COMMANDS: &[Command] = &[
     ("help",   help, "Prints this help message."),
@@ -122,7 +123,7 @@ const COMMANDS: &[Command] = &[
     ("cwd",    |_, _, path, _, _| Ok(println!("/{}", path.join("/"))), "Prints the current working directory."),
 ];
 
-fn help(_global: &Arc<Global>, _args: Vec<String>, _path: &mut Vec<String>, _cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
+fn help(_global: &Arc<BlockingGlobal>, _args: Vec<String>, _path: &mut Vec<String>, _cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
     println!("Commands:");
     for (name, _, description) in COMMANDS {
         println!("  {:<10} {}", name, description);
@@ -130,7 +131,7 @@ fn help(_global: &Arc<Global>, _args: Vec<String>, _path: &mut Vec<String>, _cwd
     Ok(())
 }
 
-fn dbg(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
+fn dbg(global: &Arc<BlockingGlobal>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
     if args.len() != 1 {
         return Err("Usage: dbg <global|.|<path>>".to_string());
     }
@@ -165,7 +166,7 @@ fn dbg(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd: &m
     }
 }
 
-fn ls(global: &Arc<Global>, _args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
+fn ls(global: &Arc<BlockingGlobal>, _args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
     let rt = Runtime::new().unwrap();
     let dir = match cwd.last() {
         Some(cwd) => {
@@ -187,7 +188,7 @@ fn ls(global: &Arc<Global>, _args: Vec<String>, _path: &mut Vec<String>, cwd: &m
     Ok(())
 }
 
-fn mkdir(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
+fn mkdir(global: &Arc<BlockingGlobal>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
     if args.len() != 1 {
         return Err("Usage: mkdir <name>".to_string());
     }
@@ -218,7 +219,7 @@ fn mkdir(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd: 
     Ok(())
 }
 
-fn cd(global: &Arc<Global>, args: Vec<String>, path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
+fn cd(global: &Arc<BlockingGlobal>, args: Vec<String>, path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
     if args.len() != 1 {
         return Err("Usage: cd <path>".to_string());
     }
@@ -259,7 +260,7 @@ fn cd(global: &Arc<Global>, args: Vec<String>, path: &mut Vec<String>, cwd: &mut
     Ok(())
 }
 
-fn rm(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
+fn rm(global: &Arc<BlockingGlobal>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
     if args.len() != 1 {
         return Err("Usage: rm <name>".to_string());
     }
@@ -290,7 +291,7 @@ fn rm(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mu
     Ok(())
 }
 
-fn cut(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, clipboard: &mut Option<Stored>) -> Result<(), String> {
+fn cut(global: &Arc<BlockingGlobal>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, clipboard: &mut Option<Stored>) -> Result<(), String> {
     if args.len() != 1 {
         return Err("Usage: cut <name>".to_string());
     }
@@ -321,7 +322,7 @@ fn cut(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd: &m
     Ok(())
 }
 
-fn paste(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, clipboard: &mut Option<Stored>) -> Result<(), String> {
+fn paste(global: &Arc<BlockingGlobal>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, clipboard: &mut Option<Stored>) -> Result<(), String> {
     if args.len() != 1 {
         return Err("Usage: cut <name>".to_string());
     }
@@ -355,7 +356,7 @@ fn paste(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd: 
     Ok(())
 }
 
-fn exit(_global: &Arc<Global>, _args: Vec<String>, _path: &mut Vec<String>, _cwd: &mut Vec<Stored>, clipboard: &mut Option<Stored>) -> Result<(), String> {
+fn exit(_global: &Arc<BlockingGlobal>, _args: Vec<String>, _path: &mut Vec<String>, _cwd: &mut Vec<Stored>, clipboard: &mut Option<Stored>) -> Result<(), String> {
     if clipboard.is_some() {
         return Err("Clipboard is not empty. Paste it somewhere first.".to_string());
     }
@@ -371,7 +372,7 @@ fn stat_format(metadata: &Metadata) -> String {
     s
 }
 
-fn stat(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
+fn stat(global: &Arc<BlockingGlobal>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
     if args.len() != 1 {
         return Err("Usage: stat <name|.>".to_string());
     }
@@ -415,7 +416,7 @@ fn stat(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd: &
     Ok(())
 }
 
-fn upload(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
+fn upload(global: &Arc<BlockingGlobal>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
     if args.len() != 1 {
         return Err("Usage: up <file>".to_string());
     }
@@ -456,7 +457,7 @@ fn upload(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd:
     Ok(())
 }
 
-fn download(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
+fn download(global: &Arc<BlockingGlobal>, args: Vec<String>, _path: &mut Vec<String>, cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
     if args.len() != 2 {
         return Err("Usage: down <from> <to>".to_string());
     }
@@ -492,7 +493,7 @@ fn download(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, cw
     Ok(())
 }
 
-fn bucket_list(global: &Arc<Global>, _args: Vec<String>, _path: &mut Vec<String>, _cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
+fn bucket_list(global: &Arc<BlockingGlobal>, _args: Vec<String>, _path: &mut Vec<String>, _cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
     println!("  {:<20} {:<20} {:<20} {}" , "Name", "Source", "Encryption", "Max block size");
     for bucket in global.list_buckets() {
         let b_type = match global.get_bucket(bucket) {
@@ -504,7 +505,7 @@ fn bucket_list(global: &Arc<Global>, _args: Vec<String>, _path: &mut Vec<String>
     Ok(())
 }
 
-fn bucket_test(global: &Arc<Global>, args: Vec<String>, _path: &mut Vec<String>, _cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
+fn bucket_test(global: &Arc<BlockingGlobal>, args: Vec<String>, _path: &mut Vec<String>, _cwd: &mut Vec<Stored>, _clipboard: &mut Option<Stored>) -> Result<(), String> {
     if args.len() != 1 {
         return Err("Usage: bktest <name>".to_string());
     }

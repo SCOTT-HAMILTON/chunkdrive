@@ -7,14 +7,14 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::global::Global;
+use crate::global::GlobalTrait;
 
 use super::{file::File, directory::Directory, metadata::Metadata};
 
 #[async_trait]
 pub trait Inode {
     async fn metadata(&self) -> &Metadata;
-    async fn delete(&mut self, global: Arc<Global>) -> Result<(), String>;
+    async fn delete<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&mut self, global: Arc<U>) -> Result<(), String>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -40,7 +40,7 @@ impl Inode for InodeType {
         match_method!(self, metadata, ).await
     }
 
-    async fn delete(&mut self, global: Arc<Global>) -> Result<(), String> {
+    async fn delete<U: GlobalTrait + std::marker::Send + std::marker::Sync>(&mut self, global: Arc<U>) -> Result<(), String> {
         match_method!(self, delete, global).await
     }
 }

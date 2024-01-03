@@ -1,4 +1,4 @@
-use global::Global;
+use global::{Global, AsyncGlobal, BlockingGlobal};
 use serde_yaml::from_reader;
 use std::env::{var, args};
 use std::path::Path;
@@ -14,6 +14,7 @@ mod services;
 mod sources;
 mod shell;
 mod stored;
+mod s3;
 
 #[cfg(test)]
 mod tests; // this is only included when running tests
@@ -41,13 +42,22 @@ fn main() {
         panic!("Could not find config file. Please set CD_CONFIG_PATH or place config.yml in one of the following locations: {:?}", CONFIG_PATHS))
     ).unwrap();
     let global: Global = from_reader(file).unwrap();
-    let global = Arc::new(global);
+
+    // Setup a handler for Ctrl+C (SIGINT)
+    let main_thread_handle = std::thread::current();
+    ctrlc::set_handler(move || {
+        println!("Ctrl+C received...");
+        main_thread_handle.unpark();
+    }).expect("Error setting Ctrl-C handler");
 
     // if run with --shell, start the shell
     if args().any(|arg| arg == "--shell") {
-        shell::shell(global);
+        let bglobal = Arc::new(BlockingGlobal::new(global));
+        shell::shell(bglobal);
     } else { // otherwise, start services
-        global::run_services(global);
+        let aglobal = Arc::new(AsyncGlobal::new(global));
+        global::run_services(aglobal);
         std::thread::park();
     }
+
 }

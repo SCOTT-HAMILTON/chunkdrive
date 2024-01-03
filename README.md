@@ -4,6 +4,7 @@
 
 </div>
 
+
 chunkdrive is a proof of concept tool that allows you to store vast amounts of data by splitting it into chunks and uploading them to services that offer free storage.
 
 Each chunk is send to a random so called "bucket". Each bucket can be configured to use a different storage service and encryption method.
@@ -123,3 +124,12 @@ The interface is fully working without JavaScript. There are only minor things t
 ## Debug shell
 
 chunkdrive includes a debug shell that lets you inspect the state of the filesystem and the buckets. You can enter it by running `chunkdrive --shell`.
+
+
+## Troubleshooting
+If you get this error
+```
+Unknown(BufferedHttpResponse {status: 403, body: "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>AccessDenied</Code><Message>Access Denied</Message><RequestId>********************************</RequestId><HostId>**********************************==</HostId></Error>", headers: {"date": "Tue, 02 Jan 2023 14:54:22 GMT", "content-type": "application/xml", "transfer-encoding": "chunked", "connection": "keep-alive", "x-amz-bucket-region": "us-east-1", "x-amz-request-id": "********************************", "x-amz-id-2": "**********************************==", "server": "Filebase"} })
+```
+Look at the `x-amz-bucket-region` field, here it's `us-east-1` set this as your region in `content.yml`.
+Seems like s3 providers won't accept request from another region by default.

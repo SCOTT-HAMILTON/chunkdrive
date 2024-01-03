@@ -1,12 +1,12 @@
 use std::sync::Arc;
 use serde::Deserialize;
 
-use crate::global::Global;
+use crate::global::AsyncGlobal;
 
 use super::http::service::HttpService;
 
 pub trait Service {
-    fn run(&self, global: Arc<Global>);
+    fn run(&self, global: Arc<AsyncGlobal>);
 }
 
 #[derive(Deserialize, Debug)]
@@ -17,7 +17,7 @@ pub enum ServiceType {
 }
 
 impl Service for ServiceType {
-    fn run(&self, global: Arc<Global>) {
+    fn run(&self, global: Arc<AsyncGlobal>) {
         match self {
             ServiceType::Http(service) => service.run(global),
         }

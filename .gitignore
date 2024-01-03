@@ -1,6 +1,6 @@
 /target
 config.yml
-root.dat
+*.dat
 /style.css
 /script.js
 .vscode/
