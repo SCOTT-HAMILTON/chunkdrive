@@ -80,6 +80,7 @@ pub fn shell(global: Arc<BlockingGlobal>) {
     let mut stored_cwd: Vec<Stored> = Vec::new();
     let mut clipboard: Option<Stored> = None;
     let mut context = Context::new();
+    context.key_bindings = liner::KeyBindings::Vi;
 
     loop {
         let prompt = format!(
@@ -99,6 +100,7 @@ pub fn shell(global: Arc<BlockingGlobal>) {
             Ok(line) => line,
             Err(_) => break,
         };
+        context.history.push(line.clone().into()).unwrap();
         let tokens = tokenize_line(&line);
 
         if tokens.is_empty() {
@@ -527,7 +529,7 @@ fn upload(
         .last()
         .ok_or("Invalid file name.")?
         .to_string();
-    let file = std::fs::File::open(&args[0]).map_err(|_| "Failed to open file.")?;
+    let file = std::fs::File::open(shellexpand::tilde(args[0].as_str()).as_ref()).map_err(|_| "Failed to open file.")?;
     let mut reader = BufReader::new(file);
     let mut data = Vec::new();
 
