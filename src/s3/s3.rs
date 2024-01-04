@@ -78,11 +78,6 @@ pub async fn download_file(
 
     let output = client.get_object(request).await?;
 
-    println!(
-        "download request output: length={:?}, type={:?}",
-        output.content_length, output.content_type
-    );
-
     output.body.ok_or(RusotoError::Validation(
         "can't download file, GetObjectRequest body missing".to_string(),
     ))
