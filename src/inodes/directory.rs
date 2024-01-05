@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{global::GlobalTrait, stored::Stored};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Directory {
     #[serde(rename = "c")]
     #[serde(default, skip_serializing_if = "is_empty")]
@@ -69,7 +69,7 @@ impl Directory {
         global: Arc<U>,
         name: &String,
         inode: InodeType,
-    ) -> Result<(), String> {
+    ) -> Result<&Stored, String> {
         if self.children.contains_key(name) {
             return Err(format!("File {} already exists", name));
         }
@@ -79,7 +79,7 @@ impl Directory {
         self.children.insert(name.clone(), stored);
         self.metadata.modified(Size::Entries(self.children.len()));
 
-        Ok(())
+        self.children.get(name).ok_or("Directory.add: failed to get just inserted child".to_string())
     }
 
     pub async fn remove<U: GlobalTrait + std::marker::Send + std::marker::Sync>(
