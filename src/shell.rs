@@ -1,13 +1,13 @@
 use crate::global::GlobalTrait;
 use futures::StreamExt;
-use liner::{Completer, Context};
-use walkdir::WalkDir;
 use indicatif::{ProgressBar, ProgressStyle};
+use liner::{Completer, Context};
 use std::{
     io::{BufReader, Read, Write},
     sync::Arc,
 };
 use tokio::runtime::Runtime;
+use walkdir::WalkDir;
 
 use crate::{
     global::BlockingGlobal,
@@ -95,7 +95,7 @@ pub fn shell(global: Arc<BlockingGlobal>) {
                 0 => String::from(""),
                 _ => {
                     format!("{}", path.join("/"))
-                },
+                }
             }
         );
 
@@ -257,7 +257,6 @@ fn ls(
     Ok(())
 }
 
-
 fn mkdir_in_dir(
     global: &Arc<BlockingGlobal>,
     parent_dir: &mut Directory,
@@ -265,8 +264,15 @@ fn mkdir_in_dir(
 ) -> Result<Stored, String> {
     let rt = Runtime::new().unwrap();
     rt.block_on(async {
-        parent_dir.add(global.clone(), &new_dir.to_string(), Directory::new().to_enum()).await
-    }).map(|s|s.clone())
+        parent_dir
+            .add(
+                global.clone(),
+                &new_dir.to_string(),
+                Directory::new().to_enum(),
+            )
+            .await
+    })
+    .map(|s| s.clone())
 }
 
 fn mkdir(
@@ -536,8 +542,8 @@ fn upload(
         Ok(bytes) => {
             println!("Uploaded {} bytes to {}.", bytes, args[0]);
             Ok(())
-        },
-        Err(err) => Err(err)
+        }
+        Err(err) => Err(err),
     }
 }
 
@@ -547,27 +553,35 @@ fn upload_to_dir(
     parent: &mut Directory,
 ) -> Result<usize, String> {
     let path = std::path::Path::new(file_path);
-    let file_name = path.file_name().ok_or(format!("can't upload {}, it has no filename", file_path))?;
-    let file = std::fs::File::open(shellexpand::tilde(file_path).as_ref()).map_err(|_| "Failed to open file.")?;
+    let file_name = path
+        .file_name()
+        .ok_or(format!("can't upload {}, it has no filename", file_path))?;
+    let file = std::fs::File::open(shellexpand::tilde(file_path).as_ref())
+        .map_err(|_| "Failed to open file.")?;
     let mut reader = BufReader::new(file);
     let mut data = Vec::new();
 
     reader
         .read_to_end(&mut data)
         .map_err(|_| "Failed to read file.")?;
-    
+
     let size = data.len();
 
     let rt = Runtime::new().unwrap();
     let file = rt.block_on(File::create(global.clone(), data))?;
-    rt.block_on(parent.add(global.clone(), &file_name.to_string_lossy().as_ref().to_string(), file.to_enum()))?;
+    rt.block_on(parent.add(
+        global.clone(),
+        &file_name.to_string_lossy().as_ref().to_string(),
+        file.to_enum(),
+    ))?;
     Ok(size)
 }
 
 fn upload_file(
     global: &Arc<BlockingGlobal>,
     cwd: &mut Vec<Stored>,
-    file_path: &str) -> Result<usize, String> {
+    file_path: &str,
+) -> Result<usize, String> {
     let mut dir = match cwd.last() {
         Some(cwd) => {
             let rt = Runtime::new().unwrap();
@@ -615,28 +629,31 @@ fn upload_tree(
             "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {msg} ({pos}/{len}, ETA {eta})",
         )
         .unwrap(),
-    ); 
-    fn aux(cwd: &Stored, fs_cwd: &std::path::Path, global: &Arc<BlockingGlobal>,
-        pb: &ProgressBar) -> Result<(), String> {
+    );
+    fn aux(
+        cwd: &Stored,
+        fs_cwd: &std::path::Path,
+        global: &Arc<BlockingGlobal>,
+        pb: &ProgressBar,
+    ) -> Result<(), String> {
         let entries = std::fs::read_dir(fs_cwd)
-            .map_err(|err|{
-                err.to_string()
-            })?.filter_map(|_entry|
-            if let Ok(entry) = _entry {
-                let file_name = entry.file_name();
-                if file_name != "." && file_name != ".." {
-                    Some(entry)
+            .map_err(|err| err.to_string())?
+            .filter_map(|_entry| {
+                if let Ok(entry) = _entry {
+                    let file_name = entry.file_name();
+                    if file_name != "." && file_name != ".." {
+                        Some(entry)
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
-            } else {
-                None
-            }
-        );
+            });
         let (directories, files): (Vec<_>, Vec<_>) = entries
-            .filter(|entry|{entry.file_type().is_ok()})
+            .filter(|entry| entry.file_type().is_ok())
             .partition(|entry| entry.file_type().map(|m| m.is_dir()).unwrap_or(false));
-        
+
         let mut parent_dir = {
             let rt = Runtime::new().unwrap();
             let inode: InodeType = rt.block_on(cwd.get(global.clone()))?;
@@ -650,7 +667,11 @@ fn upload_tree(
             let file_name = file.file_name().to_string_lossy().as_ref().to_string();
             pb.set_message(file_name);
             pb.inc(1);
-            upload_to_dir(global, file_path.to_string_lossy().as_ref(), &mut parent_dir)?;
+            upload_to_dir(
+                global,
+                file_path.to_string_lossy().as_ref(),
+                &mut parent_dir,
+            )?;
         }
         for dir in directories {
             let dir_path = dir.path();
@@ -666,7 +687,7 @@ fn upload_tree(
         }
         Ok(())
     }
-    
+
     aux(&root_parent, parent_path, global, &pb)?;
 
     Ok(())

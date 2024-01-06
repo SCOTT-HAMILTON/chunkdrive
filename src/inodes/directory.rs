@@ -79,7 +79,9 @@ impl Directory {
         self.children.insert(name.clone(), stored);
         self.metadata.modified(Size::Entries(self.children.len()));
 
-        self.children.get(name).ok_or("Directory.add: failed to get just inserted child".to_string())
+        self.children
+            .get(name)
+            .ok_or("Directory.add: failed to get just inserted child".to_string())
     }
 
     pub async fn remove<U: GlobalTrait + std::marker::Send + std::marker::Sync>(

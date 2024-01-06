@@ -125,7 +125,8 @@ async fn get_s3_root(s3: &Option<S3Type>) -> Result<Directory, GetS3RootError> {
                             Ok(stream) => {
                                 let res = tokio::task::spawn_blocking(|| {
                                     let mut de = Deserializer::new(stream.into_blocking_read());
-                                    let res: Result<Directory, rmp_serde::decode::Error> = Deserialize::deserialize(&mut de);
+                                    let res: Result<Directory, rmp_serde::decode::Error> =
+                                        Deserialize::deserialize(&mut de);
                                     res.map_err(|err| {
                                         format!("deserialize error: {}", err.to_string())
                                     })
