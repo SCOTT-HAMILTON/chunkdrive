@@ -2,10 +2,10 @@ use crate::global::GlobalTrait;
 use futures::StreamExt;
 use liner::{Completer, Context};
 use walkdir::WalkDir;
-use indicatif::{ProgressBar, ProgressStyle, ProgressIterator};
+use indicatif::{ProgressBar, ProgressStyle};
 use std::{
     io::{BufReader, Read, Write},
-    sync::Arc, cmp::Ordering,
+    sync::Arc,
 };
 use tokio::runtime::Runtime;
 
@@ -262,23 +262,11 @@ fn mkdir_in_dir(
     global: &Arc<BlockingGlobal>,
     parent_dir: &mut Directory,
     new_dir: &str,
-) -> Result<Directory, String> {
+) -> Result<Stored, String> {
     let rt = Runtime::new().unwrap();
     rt.block_on(async {
-        let stored: Result<&Stored, String> = parent_dir.add(global.clone(), &new_dir.to_string(), Directory::new().to_enum()).await;
-        match stored {
-            Ok(s) => {
-                let inode: InodeType = s.get(global.clone()).await?;
-                match inode {
-                    InodeType::File(_) => {
-                        Err("impossible, directory turned into a file !".to_string())
-                    },
-                    InodeType::Directory(dir) => Ok(dir)
-                }
-            },
-            Err(err) => Err(err)
-        }
-    })
+        parent_dir.add(global.clone(), &new_dir.to_string(), Directory::new().to_enum()).await
+    }).map(|s|s.clone())
 }
 
 fn mkdir(
@@ -602,63 +590,6 @@ fn upload_file(
     Ok(size)
 }
 
-fn stored_to_dir(global: &Arc<BlockingGlobal>, stored: &Stored) -> Result<Directory, String> {
-    let rt = Runtime::new().unwrap();
-    let inode: InodeType = rt.block_on(stored.get(global.clone()))?;
-    match inode {
-        InodeType::Directory(dir) => Ok(dir),
-        InodeType::File(_) => {
-            Err("Can't convert Stored to dir, it's a file.".to_string())
-        }
-    }
-}
-
-fn directory_of_rel_fs_path(
-    global: &Arc<BlockingGlobal>,
-    root_path: &std::path::Path,
-    root_dir: DirectoryOrStored,
-    entry_path: &std::path::Path,
-) -> Result<Stored, String> {
-    if !entry_path.starts_with(root_path) {
-        Err(format!("Path {} does not come from directory {}", entry_path.to_string_lossy(), root_path.to_string_lossy()))
-    } else {
-        let subentries: Vec<String> = entry_path.strip_prefix(root_path)
-                .iter().map(|x| x.to_string_lossy().to_string()).collect();
-        if root_path == entry_path {
-            return Err(format!("both path {} and {} seem to be equal !", root_path.to_string_lossy(), entry_path.to_string_lossy()));
-        }
-        let rt = Runtime::new().unwrap();
-        let mut cur_dir: DirectoryOrStored = root_dir;
-        println!("dorfsp({}, {})", root_path.to_string_lossy(), entry_path.to_string_lossy());
-        for subentry in &subentries[..subentries.len() - 1] {
-            let real_cur_dir: Directory  = match cur_dir {
-                DirectoryOrStored::Dir(dir) => dir,
-                DirectoryOrStored::Stored(stored) => stored_to_dir(global, &stored)?
-            };
-            let sub_stored: &Stored = real_cur_dir.get(&subentry.to_string())?;
-            let inode: InodeType = rt.block_on(sub_stored.get(global.clone())).map_err(|err|{
-                format!("can't get {} from cur_dir: {}", subentry, err)
-            })?;
-            match inode {
-                InodeType::Directory(_) => { cur_dir = DirectoryOrStored::Stored(sub_stored.clone()); },
-                InodeType::File(_) => {
-                    return Err(format!("{} in {} is a file not a directory", subentry, entry_path.to_string_lossy()))
-                }
-            }
-        }
-        match cur_dir {
-            DirectoryOrStored::Stored(stored) => Ok(stored.clone()),
-            DirectoryOrStored::Dir(_) => Err("Impossible, cur_dir is Directory not Stored".to_string())
-        }
-    }
-}
-
-#[derive(Clone)]
-enum DirectoryOrStored {
-    Dir(Directory),
-    Stored(Stored),
-}
-
 fn upload_tree(
     global: &Arc<BlockingGlobal>,
     args: Vec<String>,
@@ -669,8 +600,15 @@ fn upload_tree(
     if args.len() != 1 {
         return Err("Usage: up_tree <path/to/directory>".to_string());
     }
-    let count = WalkDir::new(std::path::Path::new(shellexpand::tilde(args[0].as_str()).as_ref()))
-        .into_iter().count();
+    let expanded_path = shellexpand::tilde(&args[0].as_str()).as_ref().to_string();
+    let parent_path = std::path::Path::new(&expanded_path);
+    let count = WalkDir::new(parent_path).into_iter().count();
+    let root_parent: Stored = if cwd.is_empty() {
+        Err("can't up_tree directly in root, need to be in subfolder...".to_string())
+    } else {
+        Ok(cwd.last().unwrap().clone())
+    }?;
+
     let pb = ProgressBar::new(count as u64);
     pb.set_style(
         ProgressStyle::with_template(
@@ -678,82 +616,58 @@ fn upload_tree(
         )
         .unwrap(),
     ); 
-    let (root_parent, parent_is_root): (DirectoryOrStored, bool) = if cwd.is_empty() {
-        (DirectoryOrStored::Dir(global.get_root()), true)
-    } else {
-        (DirectoryOrStored::Stored(cwd.last().unwrap().clone()), false)
-    };
-    let mut cur_dir: DirectoryOrStored = root_parent.clone();
-    let mut failed = Vec::new();
-    let tmp_str: String = shellexpand::tilde(args[0].as_str()).as_ref().to_string();
-    let tree_root_path = std::path::Path::new(tmp_str.as_str());
-    for entry in WalkDir::new(tree_root_path)
-        .sort_by(|a,b| {
-            if a.file_type().is_dir() && !b.file_type().is_dir() {
-                Ordering::Less
-            } else {
-                a.file_name().cmp(b.file_name())
-            }
-        })
-        .into_iter().filter_map(|e| e.ok()).progress_with(pb.clone()) {
-        if entry.path() == tree_root_path {
-            continue;
-        }
-        match directory_of_rel_fs_path(global, tree_root_path, root_parent.clone(), entry.path()) {
-            Ok(dir) => { cur_dir = DirectoryOrStored::Stored(dir); }
-            Err(err) => {
-                failed.push((entry.clone(), format!("failed to find folder of {} in root: {}", entry.path().to_string_lossy(), err)));
-                continue;
-            }
-        }
-        match entry.path().file_name() {
-            Some(file_name) => {
-                pb.set_message(file_name.to_string_lossy().to_string());
-                let mut real_cur_dir: Directory  = match cur_dir {
-                    DirectoryOrStored::Dir(ref dir) => dir.clone(),
-                    DirectoryOrStored::Stored(ref stored) => stored_to_dir(global, &stored)?
-                };
-                if entry.file_type().is_dir() {
-                    mkdir_in_dir(global, &mut real_cur_dir, file_name.to_string_lossy().as_ref()).err().and_then(|err|{
-                        failed.push((entry, format!("failed to add dir to root: {}", err)));
-                        Some(()) 
-                    });
-                    let rt = Runtime::new().unwrap();
-                    match cur_dir {
-                        DirectoryOrStored::Dir(_) => {},
-                        DirectoryOrStored::Stored(stored) => {
-                            rt.block_on(async { stored.put(global.clone(), real_cur_dir.to_enum()).await })?;
-                        }
-                    }
-                } else if entry.file_type().is_file() {
-                    upload_to_dir(global, entry.path().to_string_lossy().as_ref(), &mut real_cur_dir)?;
-                    match cur_dir {
-                        DirectoryOrStored::Dir(_) => { },
-                        DirectoryOrStored::Stored(stored) => {
-                            let rt = Runtime::new().unwrap();
-                            rt.block_on(async { stored.put(global.clone(), real_cur_dir.to_enum()).await })?;
-                        }
-                    }
+    fn aux(cwd: &Stored, fs_cwd: &std::path::Path, global: &Arc<BlockingGlobal>,
+        pb: &ProgressBar) -> Result<(), String> {
+        let entries = std::fs::read_dir(fs_cwd)
+            .map_err(|err|{
+                err.to_string()
+            })?.filter_map(|_entry|
+            if let Ok(entry) = _entry {
+                let file_name = entry.file_name();
+                if file_name != "." && file_name != ".." {
+                    Some(entry)
+                } else {
+                    None
                 }
+            } else {
+                None
             }
-            None => { failed.push((entry.clone(), "invalid file name".to_string())) }
+        );
+        let (directories, files): (Vec<_>, Vec<_>) = entries
+            .filter(|entry|{entry.file_type().is_ok()})
+            .partition(|entry| entry.file_type().map(|m| m.is_dir()).unwrap_or(false));
+        
+        let mut parent_dir = {
+            let rt = Runtime::new().unwrap();
+            let inode: InodeType = rt.block_on(cwd.get(global.clone()))?;
+            match inode {
+                InodeType::Directory(dir) => Ok(dir),
+                _ => Err("Not in a directory.".to_string()),
+            }
+        }?;
+        for file in files {
+            let file_path = file.path();
+            let file_name = file.file_name().to_string_lossy().as_ref().to_string();
+            pb.set_message(file_name);
+            pb.inc(1);
+            upload_to_dir(global, file_path.to_string_lossy().as_ref(), &mut parent_dir)?;
         }
-    }
-    if failed.len() > 0 {
-        println!("Failed to upload: ");
-    }
-    for (entry, err) in failed {
-       println!("{} -> {}", entry.path().to_string_lossy(), err); 
+        for dir in directories {
+            let dir_path = dir.path();
+            let dir_name = dir.file_name().to_string_lossy().as_ref().to_string();
+            pb.set_message(dir_name.clone());
+            pb.inc(1);
+            let new_cwd = mkdir_in_dir(global, &mut parent_dir, dir_name.as_str())?;
+            aux(&new_cwd, &dir_path, global, pb)?;
+        }
+        {
+            let rt = Runtime::new().unwrap();
+            rt.block_on(async { cwd.put(global.clone(), &parent_dir.to_enum()).await })?;
+        }
+        Ok(())
     }
     
-    if parent_is_root {
-        match root_parent {
-            DirectoryOrStored::Dir(dir) => {
-                global.save_root(&dir);
-            },
-            DirectoryOrStored::Stored(_) => { }
-        }
-    }
+    aux(&root_parent, parent_path, global, &pb)?;
 
     Ok(())
 }
