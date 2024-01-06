@@ -93,8 +93,9 @@ pub fn shell(global: Arc<BlockingGlobal>) {
             },
             match path.len() {
                 0 => String::from(""),
-                1 => path.last().unwrap().clone(),
-                _ => format!("../{}", path.last().unwrap()),
+                _ => {
+                    format!("{}", path.join("/"))
+                },
             }
         );
 
@@ -628,6 +629,7 @@ fn directory_of_rel_fs_path(
         }
         let rt = Runtime::new().unwrap();
         let mut cur_dir: DirectoryOrStored = root_dir;
+        println!("dorfsp({}, {})", root_path.to_string_lossy(), entry_path.to_string_lossy());
         for subentry in &subentries[..subentries.len() - 1] {
             let real_cur_dir: Directory  = match cur_dir {
                 DirectoryOrStored::Dir(dir) => dir,
@@ -726,9 +728,7 @@ fn upload_tree(
                 } else if entry.file_type().is_file() {
                     upload_to_dir(global, entry.path().to_string_lossy().as_ref(), &mut real_cur_dir)?;
                     match cur_dir {
-                        DirectoryOrStored::Dir(root) => {
-                            global.save_root(&root);
-                        },
+                        DirectoryOrStored::Dir(_) => { },
                         DirectoryOrStored::Stored(stored) => {
                             let rt = Runtime::new().unwrap();
                             rt.block_on(async { stored.put(global.clone(), real_cur_dir.to_enum()).await })?;
