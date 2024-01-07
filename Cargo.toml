@@ -6,29 +6,29 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-actix-multipart = "0.6.0"
-actix-web = { version = "4.3.1", features=["macros"] }
+actix-multipart = "0.6.1"
+actix-web = { version = "4.4.1", features=["macros"] }
 async-stream = "0.3.5"
-async-trait = "0.1.71"
-chrono = "0.4.26"
-ctrlc = { version = "3.2.0", features=["termination"]}
+async-trait = "0.1.77"
+chrono = "0.4.31"
+ctrlc = { version = "3.4.2", features=["termination"]}
 delegate = "0.12.0"
-futures = "0.3.28"
+futures = "0.3.30"
 indicatif = "0.17.7"
 rand = "0.8.5"
-redox_liner = "0.5.1"
-reqwest = {version = "0.11.18", features = ["json", "multipart", "rustls-tls"], default-features = false}
-rmp-serde = "1.1.1"
+redox_liner = "0.5.2"
+reqwest = {version = "0.11.23", features = ["json", "multipart", "rustls-tls"], default-features = false}
+rmp-serde = "1.1.2"
 rusoto_core = "0.48.0"
 rusoto_sqs = "0.48.0"
 rusoto_s3 = "0.48.0"
 rusoto_credential = "0.48.0"
 rust-crypto = "0.2.36"
-serde =  { version = "1.0.166", features = ["derive"] }
-serde_json = "1.0.100"
-serde_yaml = "0.9.22"
+serde =  { version = "1.0.195", features = ["derive"] }
+serde_json = "1.0.111"
+serde_yaml = "0.9.30"
 shellexpand = "3.1.0"
 tokio = { version = "1", features = ["full"] }
-urlencoding = "2.1.2"
+urlencoding = "2.1.3"
 walkdir = "2"
 yew = { version = "0.20.0", features = ["ssr"], default-features = false }

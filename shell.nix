@@ -7,6 +7,7 @@ pkgs.mkShell {
     pkgs.latest.rustChannels.stable.rust
     pkgs.latest.rustChannels.stable.rust-src
     pkgs.cargo
+    pkgs.cargo-edit
     pkgs.openssl
     pkgs.pkg-config
   ];
