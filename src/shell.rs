@@ -635,6 +635,7 @@ fn upload_tree(
         fs_cwd: &std::path::Path,
         global: &Arc<BlockingGlobal>,
         pb: &ProgressBar,
+        failed_files: &mut Vec<(String, String)>
     ) -> Result<(), String> {
         let entries = std::fs::read_dir(fs_cwd)
             .map_err(|err| err.to_string())?
@@ -667,11 +668,13 @@ fn upload_tree(
             let file_name = file.file_name().to_string_lossy().as_ref().to_string();
             pb.set_message(file_name);
             pb.inc(1);
-            upload_to_dir(
-                global,
-                file_path.to_string_lossy().as_ref(),
-                &mut parent_dir,
-            )?;
+            if let Err(err) = upload_to_dir(
+                            global,
+                            file_path.to_string_lossy().as_ref(),
+                            &mut parent_dir,
+                        ) {
+                failed_files.push((file_path.to_string_lossy().as_ref().to_string(), err));
+            }
         }
         for dir in directories {
             let dir_path = dir.path();
@@ -679,7 +682,7 @@ fn upload_tree(
             pb.set_message(dir_name.clone());
             pb.inc(1);
             let new_cwd = mkdir_in_dir(global, &mut parent_dir, dir_name.as_str())?;
-            aux(&new_cwd, &dir_path, global, pb)?;
+            aux(&new_cwd, &dir_path, global, pb, failed_files)?;
         }
         {
             let rt = Runtime::new().unwrap();
@@ -687,10 +690,15 @@ fn upload_tree(
         }
         Ok(())
     }
-
-    aux(&root_parent, parent_path, global, &pb)?;
-
-    Ok(())
+    let mut failed_files = Vec::new();
+    let res = aux(&root_parent, parent_path, global, &pb, &mut failed_files);
+    if !failed_files.is_empty() {
+        println!("Failed to upload: ");
+        for (file, err) in failed_files {
+            println!("{} -> {}", file, err);
+        }
+    }
+    res
 }
 
 fn download(
