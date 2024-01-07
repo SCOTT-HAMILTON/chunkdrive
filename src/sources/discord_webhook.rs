@@ -127,14 +127,16 @@ impl Source for DiscordWebhook {
             .send()
             .await
             .map_err(|e| format!("Error sending request: {}", e))?;
-        let text_response = response.text().await.map_err(|e|{
-            format!("Error getting response text: {}", e)
+        let text_response = response
+            .text()
+            .await
+            .map_err(|e| format!("Error getting response text: {}", e))?;
+        let parsed = serde_json::from_str::<MessageResponse>(&text_response).map_err(|e| {
+            format!(
+                "Error parsing response: {}, full response: {:?}",
+                e, text_response
+            )
         })?;
-        let parsed =
-            serde_json::from_str::<MessageResponse>(&text_response)
-            .map_err(|e|
-                format!("Error parsing response: {}, full response: {:?}", e, text_response)
-            )?;
         Ok(parsed.id.as_bytes().to_vec())
     }
 }

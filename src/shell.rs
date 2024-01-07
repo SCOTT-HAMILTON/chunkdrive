@@ -635,7 +635,7 @@ fn upload_tree(
         fs_cwd: &std::path::Path,
         global: &Arc<BlockingGlobal>,
         pb: &ProgressBar,
-        failed_files: &mut Vec<(String, String)>
+        failed_files: &mut Vec<(String, String)>,
     ) -> Result<(), String> {
         let entries = std::fs::read_dir(fs_cwd)
             .map_err(|err| err.to_string())?
@@ -669,10 +669,10 @@ fn upload_tree(
             pb.set_message(file_name);
             pb.inc(1);
             if let Err(err) = upload_to_dir(
-                            global,
-                            file_path.to_string_lossy().as_ref(),
-                            &mut parent_dir,
-                        ) {
+                global,
+                file_path.to_string_lossy().as_ref(),
+                &mut parent_dir,
+            ) {
                 failed_files.push((file_path.to_string_lossy().as_ref().to_string(), err));
             }
         }
