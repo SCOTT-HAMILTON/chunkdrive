@@ -17,6 +17,6 @@ async fn stored_with_url() {
     let (bucket, descriptor) = (split[0], split[1]);
     let stored1 = Stored::from_url(bucket, descriptor).unwrap();
     assert_eq!(stored, stored1);
-    let object1 = stored1.get::<String>(global.clone()).await.unwrap();
+    let object1 = stored1.get::<String, Global>(global.clone()).await.unwrap();
     assert_eq!(object, object1);
 }

@@ -2,7 +2,7 @@ use serde_yaml::from_str;
 use tokio::runtime::Runtime;
 
 use super::utils::make_temp_config;
-use crate::global::Global;
+use crate::global::{Global, GlobalTrait};
 
 fn shared_default(encryption: bool) {
     let cfg = make_temp_config(encryption, 25);
