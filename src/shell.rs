@@ -99,8 +99,7 @@ pub fn shell(global: Arc<BlockingGlobal>) {
             }
         );
 
-        let line = match context.read_line(liner::Prompt::from(&prompt), None, &mut ShellCompleter)
-        {
+        let line: String = match context.read_line(&prompt, None, &mut ShellCompleter) {
             Ok(line) => line,
             Err(_) => break,
         };
